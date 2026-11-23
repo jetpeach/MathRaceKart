@@ -1,0 +1,3233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Math Kart Grand Prix 3D - Three.js Cockpit Racing</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Three.js WebGL 3D Engine -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- Google Fonts: Inter & Press Start 2P -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Press+Start+2P&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+      background-color: #070b14;
+      color: #f3f4f6;
+      overflow: hidden;
+    }
+    .font-arcade {
+      font-family: 'Press Start 2P', monospace;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.6);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #3b82f6;
+      border-radius: 3px;
+    }
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.96); opacity: 0.85; }
+      50% { transform: scale(1.04); opacity: 1; }
+      100% { transform: scale(0.96); opacity: 0.85; }
+    }
+    .pulse-warning {
+      animation: pulse-ring 0.9s infinite ease-in-out;
+    }
+    @keyframes pop-fade {
+      0% { transform: translate(-50%, 10px) scale(0.85); opacity: 0; }
+      20% { transform: translate(-50%, 0px) scale(1.05); opacity: 1; }
+      80% { transform: translate(-50%, -4px) scale(1); opacity: 1; }
+      100% { transform: translate(-50%, -12px) scale(0.95); opacity: 0; }
+    }
+    .banner-animate {
+      animation: pop-fade 1.15s ease-out forwards;
+    }
+    #three-viewport canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
+  </style>
+</head>
+<body class="relative w-screen h-screen flex flex-col items-center justify-center bg-slate-950 overflow-hidden select-none">
+
+  <!-- MAIN GAME CONTAINER -->
+  <div id="game-container" class="relative w-full h-full max-w-7xl max-h-[900px] flex flex-col justify-between overflow-hidden shadow-2xl md:rounded-xl bg-black border border-slate-800">
+
+    <!-- THREE.JS WEBGL 3D VIEWPORT -->
+    <div id="three-viewport" class="absolute inset-0 w-full h-full z-0"></div>
+
+    <!-- WINDSHIELD SPEED/IMPACT FEEDBACK BANNER -->
+    <div id="hit-banner" class="hidden absolute left-1/2 top-[38%] z-30 pointer-events-none px-5 py-2.5 rounded-2xl bg-slate-950/90 border-2 font-arcade text-[10px] md:text-sm tracking-wide shadow-2xl whitespace-nowrap">
+      BOOST!
+    </div>
+
+    <!-- STAR INVINCIBILITY / BOOST VIGNETTE -->
+    <div id="screen-fx" class="hidden absolute inset-0 z-10 pointer-events-none transition-opacity duration-200"></div>
+
+    <!-- UI OVERLAY: TITLE SCREEN / MAIN MENU -->
+    <div id="screen-title" class="absolute inset-0 z-40 flex flex-col items-center justify-between p-4 md:p-6 bg-slate-950/75 backdrop-blur-md overflow-y-auto">
+      <!-- Title Header -->
+      <div class="text-center mt-1 md:mt-4">
+        <div class="inline-flex items-center space-x-2 bg-blue-600/20 border border-blue-500/40 px-3.5 py-1.5 rounded-full mb-2.5 text-blue-300 text-[11px] font-bold uppercase tracking-wider">
+          <i class="fa-solid fa-cube text-cyan-400"></i>
+          <span id="webgl-badge">WebGL 3D Engine Active</span>
+        </div>
+        <h1 class="text-2xl md:text-5xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-rose-500 to-cyan-400 font-arcade drop-shadow-lg leading-tight">
+          MATH KART GP 3D
+        </h1>
+        <p class="text-slate-300 text-xs md:text-sm mt-1.5 font-medium">True 3D Cockpit Racing &bull; Spline Circuits &bull; 3D Obstacles &amp; Tactical Math Boosts</p>
+      </div>
+
+      <!-- Center Options Box -->
+      <div class="w-full max-w-md glass-panel p-4 md:p-6 rounded-2xl border border-slate-700 shadow-2xl space-y-3.5 my-3">
+        <!-- Grade Selector -->
+        <div>
+          <label class="block text-xs font-bold uppercase text-slate-400 mb-2 flex items-center justify-between">
+            <span><i class="fa-solid fa-graduation-cap text-amber-400 mr-1.5"></i> Math Difficulty Level</span>
+            <span id="grade-desc" class="text-amber-400 font-bold">Grade 5</span>
+          </label>
+          <div class="grid grid-cols-4 gap-2">
+            <button onclick="setGrade(1)" class="grade-btn py-2 text-xs font-bold rounded-lg border border-slate-700 bg-slate-800 hover:bg-blue-600 transition">G1</button>
+            <button onclick="setGrade(2)" class="grade-btn py-2 text-xs font-bold rounded-lg border border-slate-700 bg-slate-800 hover:bg-blue-600 transition">G2</button>
+            <button onclick="setGrade(3)" class="grade-btn py-2 text-xs font-bold rounded-lg border border-slate-700 bg-slate-800 hover:bg-blue-600 transition">G3</button>
+            <button onclick="setGrade(4)" class="grade-btn py-2 text-xs font-bold rounded-lg border border-slate-700 bg-slate-800 hover:bg-blue-600 transition">G4</button>
+            <button onclick="setGrade(5)" class="grade-btn py-2 text-xs font-bold rounded-lg border border-blue-500 bg-blue-600 text-white font-bold transition">G5</button>
+            <button onclick="setGrade(6)" class="grade-btn py-2 text-xs font-bold rounded-lg border border-slate-700 bg-slate-800 hover:bg-blue-600 transition">G6</button>
+            <button onclick="setGrade(7)" class="grade-btn py-2 text-xs font-bold rounded-lg border border-slate-700 bg-slate-800 hover:bg-blue-600 transition">G7</button>
+            <button onclick="setGrade(8)" class="grade-btn py-2 text-xs font-bold rounded-lg border border-slate-700 bg-slate-800 hover:bg-blue-600 transition">G8</button>
+          </div>
+          <p id="grade-info" class="text-[11px] text-slate-400 mt-1.5 italic text-center">Multiplication, division, fractions, order of ops &amp; decimals.</p>
+        </div>
+
+        <!-- Auto Accelerate Toggle -->
+        <div class="flex items-center justify-between bg-slate-900/70 p-3 rounded-xl border border-slate-800">
+          <div>
+            <div class="text-xs font-bold text-slate-200">Auto-Accelerate</div>
+            <div class="text-[10px] text-slate-400">Hold gas automatically so you can focus on steering &amp; items</div>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer shrink-0 ml-2">
+            <input type="checkbox" id="auto-accel-toggle" class="sr-only peer" checked>
+            <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+          </label>
+        </div>
+
+        <!-- Tilt / Rotation Sensor Steering Toggle (Phone & Tablet) -->
+        <div class="bg-slate-900/70 p-3 rounded-xl border border-slate-800 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <div class="pr-2">
+              <div class="text-xs font-bold text-slate-200 flex items-center space-x-1.5">
+                <i class="fa-solid fa-mobile-screen-button text-cyan-400"></i>
+                <span>Tilt Steering (Phone / Tablet)</span>
+              </div>
+              <div id="tilt-status-text" class="text-[10px] text-slate-400 mt-0.5">Steer by tilting your device left or right</div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer shrink-0 ml-2">
+              <input type="checkbox" id="tilt-steer-toggle" class="sr-only peer">
+              <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>
+            </label>
+          </div>
+
+          <!-- Live Tilt Test Meter & Calibration Controls -->
+          <div id="tilt-test-bar-wrap" class="hidden pt-2 border-t border-slate-800 space-y-2">
+            <div class="flex items-center justify-between text-[10px]">
+              <span class="text-slate-400 font-semibold">Live Sensor: <strong id="tilt-test-deg" class="text-cyan-400">Waiting...</strong></span>
+              <div class="flex items-center space-x-1.5">
+                <button type="button" id="btn-tilt-allow" onclick="requestTiltPermission(true)" class="px-2 py-1 rounded-lg bg-cyan-600/90 hover:bg-cyan-500 text-white font-bold text-[10px] transition">
+                  Allow Sensor
+                </button>
+                <button type="button" id="btn-tilt-invert-menu" onclick="toggleInvertTilt()" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-bold text-[10px] transition">
+                  Invert: Off
+                </button>
+              </div>
+            </div>
+            <div class="relative w-full h-2.5 bg-slate-800 rounded-full border border-slate-700 overflow-hidden">
+              <div class="absolute left-1/2 top-0 bottom-0 w-0.5 bg-slate-500 -translate-x-1/2"></div>
+              <div id="tilt-test-dot" class="absolute top-1/2 w-3.5 h-3.5 rounded-full bg-cyan-400 border border-white shadow -translate-y-1/2 -translate-x-1/2" style="left: 50%;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Win Condition Highlight -->
+        <div class="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-xs flex items-start space-x-2.5">
+          <i class="fa-solid fa-triangle-exclamation text-amber-400 text-sm mt-0.5"></i>
+          <div>
+            <strong class="font-bold">Grand Prix Rule:</strong> You must answer at least <span class="underline decoration-amber-400 font-extrabold">50% of math questions</span> correctly to claim 1st place—and dodge 3D road hazards to stay ahead!
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="grid grid-cols-2 gap-3 pt-1">
+          <button onclick="openLeaderboard()" class="py-3 px-3 rounded-xl font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 transition flex items-center justify-center space-x-2 border border-slate-700 text-xs md:text-sm">
+            <i class="fa-solid fa-trophy text-amber-400"></i>
+            <span>Leaderboard</span>
+          </button>
+          <button onclick="startTournament()" class="py-3 px-3 rounded-xl font-bold bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white shadow-lg shadow-emerald-900/40 transition flex items-center justify-center space-x-2 font-arcade text-[11px] md:text-xs tracking-wider">
+            <span>START GP</span>
+            <i class="fa-solid fa-play"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Controls Guide Footer -->
+      <div class="text-[10px] md:text-xs text-slate-300 flex flex-wrap justify-center gap-2.5 md:gap-5 bg-slate-900/85 px-4 py-2 rounded-full border border-slate-800">
+        <span><b class="text-white">Steer:</b> ← → / Tilt / Touch</span>
+        <span><b class="text-white">Gas / Brake:</b> ↑ ↓ / W S</span>
+        <span><b class="text-white">Item:</b> Space / Tap</span>
+        <span><b class="text-white">Math:</b> 1–4 / Tap</span>
+      </div>
+    </div>
+
+    <!-- IN-GAME HUD OVERLAY -->
+    <div id="screen-hud" class="hidden absolute inset-0 z-20 pointer-events-none flex flex-col justify-between p-2.5 md:p-4">
+      <!-- Top Row -->
+      <div class="flex items-start justify-between gap-2 w-full">
+        <!-- Left: Position, Lap, Math Boost & Accuracy -->
+        <div class="flex flex-col space-y-1.5 pointer-events-auto min-w-0">
+          <div class="flex items-center space-x-2 md:space-x-3 bg-slate-950/80 backdrop-blur-md px-2.5 md:px-4 py-1.5 md:py-2 rounded-2xl border border-slate-700/80 shadow-xl">
+            <div class="flex flex-col items-center min-w-[40px] md:min-w-[54px]">
+              <span class="text-[9px] md:text-[10px] uppercase font-bold text-slate-400">POS</span>
+              <span id="hud-pos" class="text-base md:text-2xl font-black font-arcade text-amber-400">1st</span>
+            </div>
+            <div class="h-7 w-px bg-slate-700"></div>
+            <div class="flex flex-col min-w-0">
+              <span id="hud-track-name" class="text-[10px] md:text-xs font-bold text-cyan-400 truncate">Emerald Circuit</span>
+              <span class="text-[10px] md:text-xs font-semibold text-slate-300 whitespace-nowrap">
+                L<span id="hud-lap" class="text-amber-400 font-bold">1</span>/3 &bull; R<span id="hud-race-num" class="text-emerald-400 font-bold">1</span>/4
+              </span>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-1.5">
+            <div class="bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-xl border border-slate-700/80 flex items-center space-x-1">
+              <i class="fa-solid fa-bolt text-amber-400 text-[10px]"></i>
+              <span id="hud-peak-boost" class="text-[10px] font-extrabold text-emerald-400 font-arcade">+0</span>
+            </div>
+            <div class="bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-xl border border-slate-700/80 flex items-center space-x-1">
+              <i class="fa-solid fa-calculator text-blue-400 text-[10px]"></i>
+              <span id="hud-math-live" class="text-[10px] font-bold text-slate-200">0/0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Top-Center: Mario-Kart Style Special Item Slot (Leaves bottom-center open for 3D steering wheel) -->
+        <button onclick="triggerPlayerItem()" id="hud-item-btn" class="pointer-events-auto flex flex-col items-center justify-center bg-slate-950/90 hover:bg-slate-900 backdrop-blur-md px-2.5 md:px-4 py-1.5 md:py-2 rounded-2xl border-2 border-slate-700 shadow-2xl transition active:scale-95 min-w-[82px] md:min-w-[116px] shrink-0">
+          <div class="flex items-center space-x-1.5">
+            <i id="hud-item-icon" class="fa-solid fa-box-open text-slate-500 text-sm md:text-lg"></i>
+            <span id="hud-item-name" class="text-[10px] md:text-xs font-arcade text-slate-400">EMPTY</span>
+          </div>
+          <span class="text-[8px] md:text-[9px] text-slate-400 uppercase tracking-wider mt-0.5">TAP / SPACE</span>
+        </button>
+
+        <!-- Right: True-Shape 3D Track Minimap & Audio -->
+        <div class="flex flex-col items-end space-y-1.5 pointer-events-auto shrink-0">
+          <div class="relative w-24 h-24 md:w-44 md:h-44 bg-slate-950/80 backdrop-blur-md rounded-2xl border-2 border-slate-700/80 shadow-2xl p-1 overflow-hidden">
+            <canvas id="minimapCanvas" class="w-full h-full rounded-xl"></canvas>
+            <div class="absolute bottom-0.5 right-1.5 text-[8px] md:text-[9px] font-bold text-slate-400 bg-slate-900/90 px-1 py-0.5 rounded">MAP</div>
+          </div>
+
+          <div class="flex items-center space-x-1.5">
+            <button onclick="toggleTiltFromHud()" id="btn-tilt-hud" title="Toggle Tilt Steering" class="p-2 md:p-2.5 rounded-full bg-slate-950/80 hover:bg-slate-800 border border-slate-700 text-slate-400 transition shadow-lg">
+              <i class="fa-solid fa-mobile-screen-button text-xs"></i>
+            </button>
+            <button onclick="returnToMainMenu()" title="Exit to Menu" class="p-2 md:p-2.5 rounded-full bg-slate-950/80 hover:bg-slate-800 border border-slate-700 text-slate-300 transition shadow-lg">
+              <i class="fa-solid fa-house text-xs"></i>
+            </button>
+            <button onclick="toggleAudio()" id="btn-audio" title="Mute / Unmute" class="p-2 md:p-2.5 rounded-full bg-slate-950/80 hover:bg-slate-800 border border-slate-700 text-slate-300 transition shadow-lg">
+              <i class="fa-solid fa-volume-high text-xs"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Center Warning / Countdown Banner -->
+      <div id="math-warning" class="hidden self-center pointer-events-none my-auto bg-amber-500/95 text-slate-950 px-5 py-2.5 rounded-full font-arcade text-[10px] md:text-sm shadow-2xl border-2 border-amber-200 pulse-warning flex items-center space-x-2.5">
+        <i class="fa-solid fa-triangle-exclamation text-base md:text-lg"></i>
+        <span>MATH CHALLENGE INCOMING!</span>
+      </div>
+
+      <!-- Bottom Row: Speedometer (Left) & Touch / Tilt / Status (Right) -->
+      <div class="flex items-end justify-between w-full gap-2 pb-1">
+        <!-- Speedometer & RPM Bar -->
+        <div class="pointer-events-auto bg-slate-950/85 backdrop-blur-md px-3 md:px-4 py-2 md:py-2.5 rounded-2xl border border-slate-700/80 shadow-2xl min-w-[110px] md:min-w-[148px]">
+          <div class="flex items-baseline space-x-1">
+            <span id="hud-speed" class="text-xl md:text-3xl font-black font-arcade text-cyan-400">0</span>
+            <span class="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase">MPH</span>
+          </div>
+          <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden mt-1.5 border border-slate-700">
+            <div id="hud-rpm-bar" class="h-full bg-emerald-400 transition-all duration-75" style="width: 0%;"></div>
+          </div>
+        </div>
+
+        <!-- Mobile Touch Controls (Visible on touch devices when tilt is off or awaiting sensor) -->
+        <div id="mobile-controls" class="hidden pointer-events-auto flex flex-col items-end space-y-1.5">
+          <button type="button" id="tilt-blocked-pill" onclick="requestTiltPermission(true)" class="hidden px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-400/60 text-amber-300 text-[9px] font-bold tracking-wide">
+            <i class="fa-solid fa-triangle-exclamation mr-1"></i>TILT NO SIGNAL &bull; TAP TO RETRY
+          </button>
+          <div class="flex items-center space-x-2.5">
+            <button id="btn-touch-left" class="w-16 h-16 rounded-2xl bg-slate-900/90 border-2 border-slate-600 text-white text-2xl font-bold flex items-center justify-center active:bg-blue-600 active:scale-95 transition shadow-xl">
+              <i class="fa-solid fa-arrow-left"></i>
+            </button>
+            <button id="btn-touch-right" class="w-16 h-16 rounded-2xl bg-slate-900/90 border-2 border-slate-600 text-white text-2xl font-bold flex items-center justify-center active:bg-blue-600 active:scale-95 transition shadow-xl">
+              <i class="fa-solid fa-arrow-right"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Live Tilt Steering Indicator & Quick Recenter Button (Phone / Tablet) -->
+        <div id="tilt-hud-panel" class="hidden pointer-events-auto flex flex-col items-end space-y-1.5 bg-slate-950/85 backdrop-blur-md px-3 py-2 rounded-2xl border border-cyan-500/50 shadow-2xl min-w-[144px]">
+          <div class="w-full flex items-center justify-between gap-1.5 text-[9px] font-bold uppercase tracking-wider">
+            <span id="tilt-hud-deg" class="text-cyan-400 whitespace-nowrap"><i class="fa-solid fa-compass mr-1"></i>0°</span>
+            <div class="flex items-center space-x-1">
+              <button type="button" id="btn-tilt-inv-hud" onclick="toggleInvertTilt()" class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 active:bg-cyan-600 text-slate-300 border border-slate-600 text-[9px] font-bold">
+                INV
+              </button>
+              <button type="button" onclick="recenterTilt()" class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 active:bg-cyan-600 text-slate-200 border border-slate-600 text-[9px] font-bold">
+                CENTER
+              </button>
+            </div>
+          </div>
+          <div class="relative w-full h-2.5 bg-slate-800 rounded-full border border-slate-700 overflow-hidden">
+            <div class="absolute left-1/2 top-0 bottom-0 w-0.5 bg-slate-500 -translate-x-1/2"></div>
+            <div id="tilt-gauge-dot" class="absolute top-1/2 w-3.5 h-3.5 rounded-full bg-cyan-400 border border-white shadow -translate-y-1/2 -translate-x-1/2" style="left: 50%;"></div>
+          </div>
+        </div>
+
+        <!-- Desktop Status Indicator (Hidden on mobile when touch controls show) -->
+        <div id="hud-status-box" class="hidden md:flex flex-col items-end bg-slate-950/85 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-slate-700/80 shadow-2xl min-w-[155px]">
+          <span class="text-[10px] font-bold uppercase text-slate-400">ENGINE STATUS</span>
+          <span id="hud-status-text" class="text-xs font-extrabold text-emerald-400 mt-0.5">NOMINAL</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- MATH QUESTION POPUP OVERLAY -->
+    <div id="math-modal" class="hidden absolute inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-lg">
+      <div class="w-full max-w-lg glass-panel p-5 md:p-6 rounded-3xl border-2 border-blue-500/60 shadow-2xl space-y-4 md:space-y-5">
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] md:text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center">
+              <i class="fa-solid fa-calculator mr-2"></i> Tactical Speed Boost Question
+            </span>
+            <span id="math-timer-text" class="text-sm font-arcade text-amber-400">18s</span>
+          </div>
+          <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden border border-slate-700">
+            <div id="math-timer-bar" class="bg-gradient-to-r from-amber-400 to-rose-500 h-full w-full transition-all duration-100 ease-linear"></div>
+          </div>
+        </div>
+
+        <div class="bg-slate-900/90 p-4 md:p-5 rounded-2xl border border-slate-700 text-center shadow-inner">
+          <div id="math-question-text" class="text-lg md:text-2xl font-extrabold text-white font-arcade tracking-wide leading-relaxed">
+            12 × 14 = ?
+          </div>
+        </div>
+
+        <div id="math-options-grid" class="grid grid-cols-2 gap-3"></div>
+
+        <div class="text-center text-xs text-slate-400 flex items-center justify-center space-x-2">
+          <span class="bg-slate-800 px-2 py-0.5 rounded text-[10px] font-mono text-slate-300">TAP OR 1–4</span>
+          <span>Correct = +8 MPH Peak Speed &amp; 3D Special Item!</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- POST-RACE SUMMARY MODAL -->
+    <div id="modal-post-race" class="hidden absolute inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md">
+      <div class="w-full max-w-md glass-panel p-5 md:p-6 rounded-3xl border border-slate-700 shadow-2xl text-center space-y-4 md:space-y-5">
+        <h2 id="post-race-title" class="text-xl md:text-2xl font-black font-arcade text-amber-400">RACE COMPLETE!</h2>
+
+        <div class="p-4 bg-slate-900/80 rounded-2xl border border-slate-800 space-y-3">
+          <div class="text-2xl md:text-4xl font-black font-arcade text-emerald-400" id="post-race-rank">1st Place</div>
+          <div class="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-800">
+            <div class="bg-slate-800/60 p-2 rounded-xl">
+              <span class="block text-slate-400 text-[10px]">RACE TIME</span>
+              <strong id="post-race-time" class="text-white font-bold text-sm">1:12.4</strong>
+            </div>
+            <div class="bg-slate-800/60 p-2 rounded-xl">
+              <span class="block text-slate-400 text-[10px]">MATH ACCURACY</span>
+              <strong id="post-race-math-acc" class="text-amber-400 font-bold text-sm">100% (3/3)</strong>
+            </div>
+          </div>
+          <div id="post-race-rule-note" class="hidden text-xs text-red-300 bg-red-950/50 p-2.5 rounded-xl border border-red-800/60 text-left flex items-start space-x-2">
+            <i class="fa-solid fa-circle-exclamation text-base mt-0.5 text-red-400"></i>
+            <span><strong>50% Math Rule:</strong> Finishing in 1st place requires answering at least 50% of math questions correctly!</span>
+          </div>
+        </div>
+
+        <div class="space-y-2 text-left">
+          <div class="text-xs font-bold uppercase text-slate-400">Grand Prix Standings</div>
+          <div id="post-race-standings" class="space-y-1.5 text-xs max-h-40 overflow-y-auto pr-1"></div>
+        </div>
+
+        <button onclick="nextTournamentRace()" id="btn-next-race" class="w-full py-3.5 rounded-2xl font-bold font-arcade text-xs tracking-wider bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white shadow-lg shadow-emerald-900/40 transition">
+          CONTINUE TO NEXT RACE <i class="fa-solid fa-chevron-right ml-1"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- TOURNAMENT FINAL PODIUM MODAL -->
+    <div id="modal-tournament-end" class="hidden absolute inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-lg">
+      <div class="w-full max-w-lg glass-panel p-5 md:p-6 rounded-3xl border-2 border-amber-500/50 shadow-2xl text-center space-y-5">
+        <div class="inline-block p-4 rounded-full bg-amber-500/20 text-amber-400 text-3xl">
+          <i class="fa-solid fa-trophy"></i>
+        </div>
+        <div>
+          <h2 class="text-xl md:text-3xl font-black font-arcade text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-200">GRAND PRIX COMPLETE!</h2>
+          <p id="tournament-trophy-text" class="text-slate-300 font-bold mt-1.5">Tournament Champion!</p>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3 bg-slate-900/90 p-4 rounded-2xl border border-slate-800">
+          <div>
+            <span class="block text-[10px] text-slate-400 font-bold uppercase">FINAL RANK</span>
+            <span id="final-tourn-rank" class="text-base md:text-lg font-black font-arcade text-amber-400">1st</span>
+          </div>
+          <div>
+            <span class="block text-[10px] text-slate-400 font-bold uppercase">TOTAL SCORE</span>
+            <span id="final-tourn-pts" class="text-base md:text-lg font-black font-arcade text-emerald-400">60 pts</span>
+          </div>
+          <div>
+            <span class="block text-[10px] text-slate-400 font-bold uppercase">MATH ACC</span>
+            <span id="final-tourn-acc" class="text-base md:text-lg font-black font-arcade text-cyan-400">100%</span>
+          </div>
+        </div>
+
+        <div class="space-y-2.5 text-left">
+          <label class="block text-xs font-bold text-slate-300">Save Your Score to Leaderboard:</label>
+          <div class="flex space-x-2">
+            <input type="text" id="player-name-input" maxlength="16" placeholder="Enter Racer Name" value="Speed Racer" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-amber-400">
+            <button onclick="submitFinalScore()" class="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs font-arcade transition">
+              SAVE
+            </button>
+          </div>
+        </div>
+
+        <button onclick="returnToMainMenu()" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-semibold text-xs transition">
+          Back to Main Menu
+        </button>
+      </div>
+    </div>
+
+    <!-- LEADERBOARD MODAL -->
+    <div id="modal-leaderboard" class="hidden absolute inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md">
+      <div class="w-full max-w-lg glass-panel p-5 md:p-6 rounded-3xl border border-slate-700 shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <h2 class="text-base md:text-xl font-black font-arcade text-amber-400 flex items-center">
+            <i class="fa-solid fa-trophy mr-2 text-amber-400"></i> TOP CHAMPIONS
+          </h2>
+          <button onclick="closeLeaderboard()" class="p-2 text-slate-400 hover:text-white">
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+        <div id="leaderboard-list" class="space-y-2 max-h-80 overflow-y-auto pr-1"></div>
+        <button onclick="closeLeaderboard()" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold text-xs">
+          Close
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- THREE.JS 3D RACING ENGINE & GAMEPLAY LOGIC -->
+  <script>
+    /* ==========================================================================
+       1. LEADERBOARD PERSISTENCE (Safe LocalStorage + In-Memory Fallback)
+       ========================================================================== */
+    const DEFAULT_LEADERBOARD = [
+      { name: "Speedy Einstein", score: 60, accuracy: 100, rank: "1st", grade: 5 },
+      { name: "Turbo Newton", score: 54, accuracy: 88, rank: "1st", grade: 5 },
+      { name: "Gauss Drifter", score: 48, accuracy: 75, rank: "2nd", grade: 6 },
+      { name: "Pixel Racer", score: 42, accuracy: 67, rank: "3rd", grade: 4 }
+    ];
+    let memLeaderboard = DEFAULT_LEADERBOARD.slice();
+
+    function fetchLeaderboardScores() {
+      try {
+        const raw = localStorage.getItem('math_kart_3d_leaderboard');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            memLeaderboard = parsed;
+            return parsed.sort((a, b) => b.score - a.score).slice(0, 20);
+          }
+        }
+      } catch (e) {
+        // Sandboxed preview fallback
+      }
+      return memLeaderboard.slice().sort((a, b) => b.score - a.score).slice(0, 20);
+    }
+
+    function saveLeaderboardScore(entry) {
+      const scores = fetchLeaderboardScores();
+      scores.push(entry);
+      scores.sort((a, b) => b.score - a.score);
+      const trimmed = scores.slice(0, 25);
+      memLeaderboard = trimmed;
+      try {
+        localStorage.setItem('math_kart_3d_leaderboard', JSON.stringify(trimmed));
+      } catch (e) {
+        // Ignore storage restriction
+      }
+    }
+
+    /* ==========================================================================
+       2. GAME CONSTANTS & STATE
+       ========================================================================== */
+    const ROAD_WIDTH = 22;           // Total asphalt width in 3D meters
+    const ROAD_HALF_WIDTH = 11;
+    const MAX_OFFROAD = 15.5;
+    const LAPS_PER_RACE = 3;
+    const TOTAL_TRACKS = 4;
+    const MPH_TO_MPS = 0.44;         // Scales MPH to world meters/sec for ~65-75s 3-lap races
+    let WORLD_UP = null;             // Initialized once THREE is verified loaded
+
+    let selectedGrade = 5;
+    let autoAccelerate = true;
+    let audioMuted = false;
+
+    // Three.js Core Objects
+    let scene, camera, renderer;
+    let trackGroup = null;
+    let cockpitRig = null;
+    let steeringWheelMesh = null;
+    let steeringWheelLEDs = [];
+    let wheelDisplayCtx = null;
+    let wheelDisplayTex = null;
+    let lastWheelHudKey = '';
+    let frontWheelLeft = null;
+    let frontWheelRight = null;
+    let hoodShieldMesh = null;
+    let minimapCanvas, minimapCtx;
+
+    // Track Spline & Precomputed Frames
+    let trackCurve = null;
+    let trackLength = 1000;
+    let trackFrames = [];       // { pos, tangent, right, up, curvature }
+    let minimapPoints = [];     // Pre-normalized 2D points for the exact circuit minimap
+    let currentTrackIndex = 0;
+
+    // Track Interactive Objects
+    let trackObstacles = [];    // { type, s, lateral, radius, mesh, hitCooldown }
+    let trackPads = [];         // { type, s, lateral, radius, mesh, cooldown }
+    let activeProjectiles = []; // 3D Homing shells flying along the spline
+    let activeEffects = [];     // 3D Particle bursts & EMP shockwave rings
+
+    // Player Physics & Race State
+    const player = {
+      s: 0,
+      lateral: 0,
+      speed: 0,
+      baseMaxSpeed: 120,
+      peakBoost: 0,
+      lap: 1,
+      rank: 1,
+      item: null,          // 'rocket' | 'homing' | 'shockwave' | 'star'
+      rocketTimer: 0,
+      shieldTimer: 0,
+      spinTimer: 0,
+      shakeTimer: 0,
+      steerAngle: 0,
+      cameraRoll: 0
+    };
+
+    // AI Rival Racers (5 Distinct 3D Karts)
+    const AI_CONFIGS = [
+      { id: 1, name: "Red Rocket",   bodyColor: 0xef4444, accentColor: 0xfef08a, dotColor: "#ef4444", baseSpeed: 118, laneBias: -4.2 },
+      { id: 2, name: "Blue Streak",  bodyColor: 0x3b82f6, accentColor: 0x38bdf8, dotColor: "#3b82f6", baseSpeed: 115, laneBias: 4.2 },
+      { id: 3, name: "Green Comet",  bodyColor: 0x10b981, accentColor: 0xa7f3d0, dotColor: "#10b981", baseSpeed: 112, laneBias: -2.0 },
+      { id: 4, name: "Yellow Flash", bodyColor: 0xf59e0b, accentColor: 0xffffff, dotColor: "#f59e0b", baseSpeed: 109, laneBias: 2.2 },
+      { id: 5, name: "Purple Storm", bodyColor: 0x8b5cf6, accentColor: 0xf472b6, dotColor: "#a855f7", baseSpeed: 106, laneBias: 0.0 }
+    ];
+    let aiRacers = [];
+
+    // Tournament Standings
+    let tournamentScores = {};
+    function resetTournamentScores() {
+      tournamentScores = { "Player": { name: "Player (You)", points: 0 } };
+      AI_CONFIGS.forEach(c => { tournamentScores[c.name] = { name: c.name, points: 0 }; });
+    }
+    resetTournamentScores();
+
+    // Math & Timing State
+    let questionsAskedRace = 0;
+    let questionsCorrectRace = 0;
+    let totalMathQuestionsTourn = 0;
+    let totalMathCorrectTourn = 0;
+    let mathTimerInterval = null;
+    let mathScheduleTimeout = null;
+    let mathWarningTimeout = null;
+    let mathTimeRemaining = 15;
+    let currentMathQuestion = null;
+
+    let raceStartTime = 0;
+    let isRaceActive = false;
+    let isMathActive = false;
+    let countdownTimer = null;
+
+    // Input State
+    const keys = { left: false, right: false, up: false, down: false };
+
+    // Device Rotation Sensor (Tilt Steering) State for Phones & Tablets
+    const isTouchDevice = ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+    const isAppleTouch = (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+    const DEG2RAD = Math.PI / 180;
+    let tiltSteeringEnabled = false;
+    let tiltSensorActive = false;
+    let tiltSensorSource = '';    // 'orientation' | 'motion'
+    let tiltPermissionGranted = false;
+    let tiltListenerAttached = false;
+    let tiltInverted = false;
+    let tiltNoSignalDetected = false;
+    let tiltWatchdogTimer = null;
+    let tiltRawDeg = 0;
+    let tiltZeroDeg = 0;
+    let tiltSteerValue = 0;       // Continuous analog steering [-1, 1]
+    let lastScreenAngle = 0;
+    const TILT_DEADZONE_DEG = 1.8;
+    const TILT_MAX_ANGLE_DEG = 20;
+
+    /* ==========================================================================
+       3. TRACK DEFINITIONS (4 DISTINCT 3D SPLINE CIRCUITS)
+       ========================================================================== */
+    const TRACK_CONFIGS = [
+      {
+        name: "Emerald Circuit",
+        skyColor: 0x38bdf8,
+        fogColor: 0x7dd3fc,
+        groundColor: 0x15803d,
+        curbA: "#ef4444",
+        curbB: "#ffffff",
+        asphalt: "#334155",
+        sunColor: 0xfff7ed,
+        ambientColor: 0x93c5fd,
+        sceneryType: "tree",
+        points: [
+          [0, 0, 0], [0, 0, -140], [30, 6, -270], [130, 12, -330],
+          [240, 8, -280], [290, 2, -160], [240, 0, -50], [275, 5, 70],
+          [230, 10, 180], [120, 6, 220], [25, 2, 160], [0, 0, 80]
+        ]
+      },
+      {
+        name: "Sunset Canyon",
+        skyColor: 0xc2410c,
+        fogColor: 0xea580c,
+        groundColor: 0x9a3412,
+        curbA: "#f59e0b",
+        curbB: "#fffbeb",
+        asphalt: "#292524",
+        sunColor: 0xfdba74,
+        ambientColor: 0xfb923c,
+        sceneryType: "mesa",
+        points: [
+          [0, 0, 0], [0, 4, -150], [-80, 14, -260], [-20, 22, -370],
+          [120, 18, -380], [210, 8, -270], [150, 4, -150], [250, 12, -40],
+          [240, 14, 110], [120, 6, 180], [15, 2, 130]
+        ]
+      },
+      {
+        name: "Glacier Pass",
+        skyColor: 0x7dd3fc,
+        fogColor: 0xe0f2fe,
+        groundColor: 0xdbeafe,
+        curbA: "#0284c7",
+        curbB: "#ffffff",
+        asphalt: "#1e293b",
+        sunColor: 0xffffff,
+        ambientColor: 0xbae6fd,
+        sceneryType: "pine",
+        points: [
+          [0, 0, 0], [0, 8, -140], [90, 24, -240], [20, 32, -350],
+          [-110, 22, -320], [-190, 10, -210], [-130, 16, -80], [-200, 12, 60],
+          [-130, 4, 175], [-20, 2, 150]
+        ]
+      },
+      {
+        name: "Neon Speedway",
+        skyColor: 0x09051a,
+        fogColor: 0x1e1b4b,
+        groundColor: 0x0f172a,
+        curbA: "#ec4899",
+        curbB: "#06b6d4",
+        asphalt: "#0f172a",
+        sunColor: 0xc084fc,
+        ambientColor: 0x38bdf8,
+        sceneryType: "neon",
+        points: [
+          [0, 0, 0], [0, 2, -160], [70, 12, -300], [200, 16, -340],
+          [320, 6, -240], [280, 0, -90], [160, 8, -20], [260, 14, 100],
+          [200, 8, 220], [70, 2, 210], [0, 0, 120]
+        ]
+      }
+    ];
+
+    /* ==========================================================================
+       4. WEB AUDIO API PROCEDURAL SOUND ENGINE
+       ========================================================================== */
+    let audioCtx = null;
+    let engineOsc = null;
+    let engineGain = null;
+
+    function initAudio() {
+      try {
+        if (!audioCtx) {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (AC) audioCtx = new AC();
+        }
+        if (audioCtx && audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+      } catch (e) { /* Audio disabled */ }
+    }
+
+    function toggleAudio() {
+      audioMuted = !audioMuted;
+      const btn = document.getElementById('btn-audio');
+      btn.innerHTML = audioMuted
+        ? '<i class="fa-solid fa-volume-xmark text-red-400 text-xs"></i>'
+        : '<i class="fa-solid fa-volume-high text-xs"></i>';
+    }
+
+    function playSound(type) {
+      if (audioMuted) return;
+      initAudio();
+      if (!audioCtx) return;
+
+      const now = audioCtx.currentTime;
+      const tone = (oscType, f1, f2, dur, vol, delay = 0) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = oscType;
+        osc.frequency.setValueAtTime(f1, now + delay);
+        if (f2 !== f1) osc.frequency.exponentialRampToValueAtTime(Math.max(20, f2), now + delay + dur);
+        gain.gain.setValueAtTime(vol, now + delay);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + delay + dur);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now + delay);
+        osc.stop(now + delay + dur);
+      };
+
+      if (type === 'boost') {
+        tone('sawtooth', 160, 680, 0.42, 0.22);
+      } else if (type === 'correct') {
+        [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone('sine', f, f, 0.18, 0.18, i * 0.07));
+      } else if (type === 'wrong') {
+        tone('sawtooth', 140, 75, 0.35, 0.24);
+      } else if (type === 'item') {
+        tone('triangle', 320, 920, 0.25, 0.26);
+      } else if (type === 'beep') {
+        tone('sine', 440, 440, 0.14, 0.18);
+      } else if (type === 'go') {
+        tone('sine', 880, 1100, 0.38, 0.28);
+      } else if (type === 'crash') {
+        tone('sawtooth', 135, 32, 0.3, 0.32);
+      } else if (type === 'smash') {
+        tone('square', 220, 680, 0.2, 0.22);
+      } else if (type === 'slip') {
+        tone('triangle', 680, 170, 0.35, 0.24);
+      } else if (type === 'lap') {
+        [587, 784, 1174].forEach((f, i) => tone('triangle', f, f, 0.2, 0.2, i * 0.08));
+      }
+    }
+
+    function updateEngineSound() {
+      if (audioMuted || !isRaceActive) {
+        if (engineGain && audioCtx) engineGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
+        return;
+      }
+      initAudio();
+      if (!audioCtx) return;
+
+      if (!engineOsc) {
+        engineOsc = audioCtx.createOscillator();
+        engineGain = audioCtx.createGain();
+        engineOsc.type = 'sawtooth';
+        engineOsc.frequency.setValueAtTime(55, audioCtx.currentTime);
+        engineGain.gain.setValueAtTime(0.0, audioCtx.currentTime);
+        engineOsc.connect(engineGain);
+        engineGain.connect(audioCtx.destination);
+        engineOsc.start();
+      }
+      const ratio = Math.min(1.5, player.speed / (player.baseMaxSpeed + player.peakBoost));
+      engineOsc.frequency.setTargetAtTime(48 + ratio * 135, audioCtx.currentTime, 0.08);
+      engineGain.gain.setTargetAtTime(isMathActive ? 0.015 : 0.045, audioCtx.currentTime, 0.08);
+    }
+
+    /* ==========================================================================
+       5. THREE.JS 3D SCENE, TEXTURES, COCKPIT & MESH FACTORIES
+       ========================================================================== */
+    function detectWebGLSupport() {
+      try {
+        const testCanvas = document.createElement('canvas');
+        const gl2 = testCanvas.getContext('webgl2');
+        if (gl2) return { ok: true, version: 'WebGL 2' };
+        const gl1 = testCanvas.getContext('webgl') || testCanvas.getContext('experimental-webgl');
+        if (gl1) return { ok: true, version: 'WebGL 1' };
+        return { ok: false, version: 'None' };
+      } catch (e) {
+        return { ok: false, version: e.message || 'Blocked' };
+      }
+    }
+
+    function getBaseFov() {
+      const container = document.getElementById('three-viewport');
+      const w = container.clientWidth || window.innerWidth || 1024;
+      const h = container.clientHeight || window.innerHeight || 576;
+      // Slightly wider vertical FOV on portrait phones so the steering wheel & road fit comfortably
+      return w < h ? 88 : 72;
+    }
+
+    function initThreeEngine() {
+      if (typeof THREE === 'undefined') {
+        throw new Error("Three.js library could not be loaded (check internet connection).");
+      }
+
+      const webglInfo = detectWebGLSupport();
+      if (!webglInfo.ok) {
+        throw new Error(`WebGL is unavailable on this browser (${webglInfo.version}).`);
+      }
+
+      WORLD_UP = new THREE.Vector3(0, 1, 0);
+
+      const badge = document.getElementById('webgl-badge');
+      if (badge) badge.innerText = `Three.js ${webglInfo.version} Active`;
+
+      const container = document.getElementById('three-viewport');
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0b1120);
+
+      const width = container.clientWidth || window.innerWidth || 1024;
+      const height = container.clientHeight || window.innerHeight || 576;
+
+      camera = new THREE.PerspectiveCamera(getBaseFov(), width / height, 0.1, 900);
+
+      // Try antialiased WebGL first, gracefully fall back to standard WebGL on older mobile GPUs
+      try {
+        renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "default" });
+      } catch (e) {
+        renderer = new THREE.WebGLRenderer({ antialias: false });
+      }
+      renderer.setSize(width, height);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      container.innerHTML = '';
+      container.appendChild(renderer.domElement);
+
+      // Build persistent 3D Cockpit Rig attached to camera's parent (cockpitRig)
+      buildCockpitRig();
+
+      window.addEventListener('resize', () => {
+        if (!renderer || !camera) return;
+        const w = container.clientWidth || window.innerWidth || 1024;
+        const h = container.clientHeight || window.innerHeight || 576;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+      });
+    }
+
+    function createRoadTexture(asphaltHex) {
+      const c = document.createElement('canvas');
+      c.width = 256;
+      c.height = 256;
+      const g = c.getContext('2d');
+
+      g.fillStyle = asphaltHex;
+      g.fillRect(0, 0, 256, 256);
+
+      for (let i = 0; i < 650; i++) {
+        g.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.09)';
+        g.fillRect(Math.random() * 256, Math.random() * 256, 3, 3);
+      }
+
+      g.fillStyle = '#e2e8f0';
+      g.fillRect(10, 0, 6, 256);
+      g.fillRect(240, 0, 6, 256);
+
+      g.fillStyle = 'rgba(253, 224, 71, 0.85)';
+      g.fillRect(124, 24, 8, 96);
+      g.fillRect(124, 152, 8, 96);
+
+      const tex = new THREE.CanvasTexture(c);
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(1, 52);
+      return tex;
+    }
+
+    function createCurbTexture(colorA, colorB) {
+      const c = document.createElement('canvas');
+      c.width = 64;
+      c.height = 128;
+      const g = c.getContext('2d');
+      g.fillStyle = colorA;
+      g.fillRect(0, 0, 64, 64);
+      g.fillStyle = colorB;
+      g.fillRect(0, 64, 64, 64);
+      const tex = new THREE.CanvasTexture(c);
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(1, 95);
+      return tex;
+    }
+
+    function createCheckeredTexture() {
+      const c = document.createElement('canvas');
+      c.width = 256;
+      c.height = 64;
+      const g = c.getContext('2d');
+      const sq = 16;
+      for (let y = 0; y < 64; y += sq) {
+        for (let x = 0; x < 256; x += sq) {
+          g.fillStyle = ((x / sq + y / sq) % 2 === 0) ? '#ffffff' : '#0f172a';
+          g.fillRect(x, y, sq, sq);
+        }
+      }
+      return new THREE.CanvasTexture(c);
+    }
+
+    function createBoostPadTexture() {
+      const c = document.createElement('canvas');
+      c.width = 128;
+      c.height = 128;
+      const g = c.getContext('2d');
+      g.fillStyle = '#0284c7';
+      g.fillRect(0, 0, 128, 128);
+      g.strokeStyle = '#fde047';
+      g.lineWidth = 14;
+      g.lineCap = 'round';
+      for (let y = 32; y <= 110; y += 38) {
+        g.beginPath();
+        g.moveTo(20, y);
+        g.lineTo(64, y - 24);
+        g.lineTo(108, y);
+        g.stroke();
+      }
+      return new THREE.CanvasTexture(c);
+    }
+
+    function createCarbonTexture() {
+      const c = document.createElement('canvas');
+      c.width = 64;
+      c.height = 64;
+      const g = c.getContext('2d');
+      g.fillStyle = '#0f172a';
+      g.fillRect(0, 0, 64, 64);
+      for (let y = 0; y < 64; y += 8) {
+        for (let x = 0; x < 64; x += 8) {
+          const even = ((x + y) / 8) % 2 === 0;
+          g.fillStyle = even ? '#1e293b' : '#090d16';
+          g.fillRect(x, y, 8, 4);
+          g.fillStyle = even ? '#090d16' : '#334155';
+          g.fillRect(x, y + 4, 8, 4);
+        }
+      }
+      const tex = new THREE.CanvasTexture(c);
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(4, 4);
+      return tex;
+    }
+
+    function updateWheelOLED(speedMph, gearLabel, modeText, accentColor) {
+      if (!wheelDisplayCtx || !wheelDisplayTex) return;
+      const key = `${speedMph}|${gearLabel}|${modeText}|${accentColor}`;
+      if (key === lastWheelHudKey) return;
+      lastWheelHudKey = key;
+
+      const g = wheelDisplayCtx;
+      g.fillStyle = '#020617';
+      g.fillRect(0, 0, 256, 128);
+
+      g.strokeStyle = accentColor;
+      g.lineWidth = 4;
+      g.strokeRect(4, 4, 248, 120);
+
+      g.fillStyle = accentColor;
+      g.fillRect(10, 10, 236, 24);
+      g.fillStyle = '#020617';
+      g.font = 'bold 16px monospace';
+      g.textAlign = 'center';
+      g.fillText(modeText, 128, 28);
+
+      g.fillStyle = '#facc15';
+      g.font = 'bold 58px monospace';
+      g.textAlign = 'center';
+      g.fillText(gearLabel, 64, 96);
+      g.fillStyle = '#94a3b8';
+      g.font = 'bold 13px sans-serif';
+      g.fillText('GEAR', 64, 114);
+
+      g.fillStyle = '#1e293b';
+      g.fillRect(118, 44, 3, 72);
+
+      g.fillStyle = '#38bdf8';
+      g.font = 'bold 48px monospace';
+      g.fillText(String(speedMph), 186, 92);
+      g.fillStyle = '#94a3b8';
+      g.font = 'bold 13px sans-serif';
+      g.fillText('MPH', 186, 114);
+
+      wheelDisplayTex.needsUpdate = true;
+    }
+
+    function buildCockpitRig() {
+      cockpitRig = new THREE.Group();
+
+      // Add camera to cockpitRig looking forward (-Z in Three.js local space)
+      camera.position.set(0, 1.55, 0.35);
+      camera.rotation.set(-0.07, 0, 0);
+      cockpitRig.add(camera);
+
+      const cockpitLight = new THREE.PointLight(0xe0f2fe, 1.0, 4.5);
+      cockpitLight.position.set(0, 1.72, -0.05);
+      cockpitRig.add(cockpitLight);
+
+      const carbonTex = createCarbonTexture();
+      const darkMetal = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.42, metalness: 0.72 });
+      const carbonMat = new THREE.MeshStandardMaterial({ map: carbonTex, roughness: 0.38, metalness: 0.35 });
+      const brushedAlum = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.25, metalness: 0.88 });
+      const alcantaraMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.92, metalness: 0.05 });
+      const gripAccentMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.78, metalness: 0.1 });
+      const bodyPaint = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.25, metalness: 0.4 });
+      const stripeMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.3, metalness: 0.2 });
+      const tireMat   = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.85 });
+      const rimMat    = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.3, metalness: 0.8 });
+
+      // Sloped 3D Nose / Hood visible through windshield
+      const hood = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.38, 2.3), bodyPaint);
+      hood.position.set(0, 0.65, -1.65);
+      hood.rotation.x = 0.14;
+      cockpitRig.add(hood);
+
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.4, 2.32), stripeMat);
+      stripe.position.set(0, 0.66, -1.65);
+      stripe.rotation.x = 0.14;
+      cockpitRig.add(stripe);
+
+      const wing = new THREE.Mesh(new THREE.BoxGeometry(2.15, 0.14, 0.45), darkMetal);
+      wing.position.set(0, 0.42, -2.75);
+      cockpitRig.add(wing);
+
+      // Visible Front Left & Right 3D Wheels
+      const makeFrontWheel = () => {
+        const pivot = new THREE.Group();
+        const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.34, 16), tireMat);
+        tire.rotation.z = Math.PI / 2;
+        pivot.add(tire);
+        const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.36, 12), rimMat);
+        rim.rotation.z = Math.PI / 2;
+        pivot.add(rim);
+        return pivot;
+      };
+      frontWheelLeft = makeFrontWheel();
+      frontWheelLeft.position.set(-1.1, 0.44, -2.0);
+      cockpitRig.add(frontWheelLeft);
+
+      frontWheelRight = makeFrontWheel();
+      frontWheelRight.position.set(1.1, 0.44, -2.0);
+      cockpitRig.add(frontWheelRight);
+
+      // Sculpted Carbon Cockpit Dashboard Cowling & Steering Column Housing
+      const dash = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.5, 0.68), carbonMat);
+      dash.position.set(0, 0.85, -0.68);
+      dash.rotation.x = -0.22;
+      cockpitRig.add(dash);
+
+      const dashTrim = new THREE.Mesh(new THREE.BoxGeometry(1.96, 0.04, 0.06), new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7, roughness: 0.3 }));
+      dashTrim.position.set(0, 1.07, -0.44);
+      cockpitRig.add(dashTrim);
+
+      const columnShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.068, 0.34, 16), darkMetal);
+      columnShaft.position.set(0, 1.11, -0.58);
+      columnShaft.rotation.x = Math.PI / 2 - 0.28;
+      cockpitRig.add(columnShaft);
+
+      // Side Cockpit Rollbars / Pillars
+      const pillarGeo = new THREE.CylinderGeometry(0.042, 0.052, 1.38, 10);
+      const leftPillar = new THREE.Mesh(pillarGeo, darkMetal);
+      leftPillar.position.set(-1.02, 1.48, -0.52);
+      leftPillar.rotation.set(0.25, 0, -0.22);
+      cockpitRig.add(leftPillar);
+
+      const rightPillar = new THREE.Mesh(pillarGeo, darkMetal);
+      rightPillar.position.set(1.02, 1.48, -0.52);
+      rightPillar.rotation.set(0.25, 0, 0.22);
+      cockpitRig.add(rightPillar);
+
+      // === GT / F1 MOTORSPORT 3D STEERING WHEEL ===
+      steeringWheelMesh = new THREE.Group();
+      steeringWheelMesh.position.set(0, 1.14, -0.44);
+      steeringWheelMesh.rotation.order = 'XYZ';
+      steeringWheelMesh.rotation.x = -0.28;
+
+      const rimRadius = 0.225;
+      const rimTorus = new THREE.Mesh(
+        new THREE.TorusGeometry(rimRadius, 0.024, 16, 48),
+        alcantaraMat
+      );
+      steeringWheelMesh.add(rimTorus);
+
+      const gripRight = new THREE.Mesh(
+        new THREE.TorusGeometry(rimRadius, 0.029, 14, 22, Math.PI * 0.44),
+        gripAccentMat
+      );
+      gripRight.rotation.z = -Math.PI * 0.22;
+      steeringWheelMesh.add(gripRight);
+
+      const gripLeft = new THREE.Mesh(
+        new THREE.TorusGeometry(rimRadius, 0.029, 14, 22, Math.PI * 0.44),
+        gripAccentMat
+      );
+      gripLeft.rotation.z = Math.PI - Math.PI * 0.22;
+      steeringWheelMesh.add(gripLeft);
+
+      const collarGeo = new THREE.TorusGeometry(0.0285, 0.0045, 8, 16);
+      [-0.22 * Math.PI, 0.22 * Math.PI, Math.PI - 0.22 * Math.PI, Math.PI + 0.22 * Math.PI].forEach(ang => {
+        const collar = new THREE.Mesh(collarGeo, brushedAlum);
+        collar.position.set(Math.cos(ang) * rimRadius, Math.sin(ang) * rimRadius, 0);
+        collar.rotation.z = ang;
+        collar.rotation.x = Math.PI / 2;
+        steeringWheelMesh.add(collar);
+      });
+
+      const topBand = new THREE.Mesh(
+        new THREE.TorusGeometry(rimRadius, 0.027, 12, 12, 0.16),
+        new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0x713f12, roughness: 0.35 })
+      );
+      topBand.rotation.z = Math.PI / 2 - 0.08;
+      steeringWheelMesh.add(topBand);
+
+      const spokeL = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.036, 0.018), brushedAlum);
+      spokeL.position.set(-0.14, 0.0, -0.006);
+      steeringWheelMesh.add(spokeL);
+
+      const spokeR = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.036, 0.018), brushedAlum);
+      spokeR.position.set(0.14, 0.0, -0.006);
+      steeringWheelMesh.add(spokeR);
+
+      const lowerSpokeL = new THREE.Mesh(new THREE.BoxGeometry(0.026, 0.14, 0.018), brushedAlum);
+      lowerSpokeL.position.set(-0.042, -0.14, -0.006);
+      lowerSpokeL.rotation.z = -0.18;
+      steeringWheelMesh.add(lowerSpokeL);
+
+      const lowerSpokeR = new THREE.Mesh(new THREE.BoxGeometry(0.026, 0.14, 0.018), brushedAlum);
+      lowerSpokeR.position.set(0.042, -0.14, -0.006);
+      lowerSpokeR.rotation.z = 0.18;
+      steeringWheelMesh.add(lowerSpokeR);
+
+      const centerPlate = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.15, 0.032), carbonMat);
+      centerPlate.position.set(0, -0.005, -0.004);
+      steeringWheelMesh.add(centerPlate);
+
+      const plateBezel = new THREE.Mesh(new THREE.BoxGeometry(0.23, 0.16, 0.022), brushedAlum);
+      plateBezel.position.set(0, -0.005, -0.011);
+      steeringWheelMesh.add(plateBezel);
+
+      const oledCanvas = document.createElement('canvas');
+      oledCanvas.width = 256;
+      oledCanvas.height = 128;
+      wheelDisplayCtx = oledCanvas.getContext('2d');
+      wheelDisplayTex = new THREE.CanvasTexture(oledCanvas);
+      const oledScreen = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.135, 0.068),
+        new THREE.MeshBasicMaterial({ map: wheelDisplayTex })
+      );
+      oledScreen.position.set(0, 0.008, 0.014);
+      steeringWheelMesh.add(oledScreen);
+      updateWheelOLED(0, 'N', 'READY', '#38bdf8');
+
+      const ledBarBg = new THREE.Mesh(new THREE.BoxGeometry(0.165, 0.024, 0.02), darkMetal);
+      ledBarBg.position.set(0, 0.082, 0.006);
+      steeringWheelMesh.add(ledBarBg);
+
+      steeringWheelLEDs = [];
+      const ledGeo = new THREE.SphereGeometry(0.0065, 8, 8);
+      for (let i = 0; i < 8; i++) {
+        const ledMat = new THREE.MeshBasicMaterial({ color: 0x1e293b });
+        const led = new THREE.Mesh(ledGeo, ledMat);
+        led.position.set(-0.063 + i * 0.018, 0.082, 0.017);
+        steeringWheelMesh.add(led);
+        steeringWheelLEDs.push(led);
+      }
+
+      const addWheelButton = (x, y, hexColor) => {
+        const bezel = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.015, 0.012, 12), darkMetal);
+        bezel.rotation.x = Math.PI / 2;
+        bezel.position.set(x, y, 0.014);
+        steeringWheelMesh.add(bezel);
+        const cap = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.0105, 0.0105, 0.016, 12),
+          new THREE.MeshStandardMaterial({ color: hexColor, emissive: hexColor, emissiveIntensity: 0.35, roughness: 0.3 })
+        );
+        cap.rotation.x = Math.PI / 2;
+        cap.position.set(x, y, 0.017);
+        steeringWheelMesh.add(cap);
+      };
+      addWheelButton(-0.088, 0.032, 0xef4444);
+      addWheelButton(-0.088, -0.018, 0x38bdf8);
+      addWheelButton(0.088, 0.032, 0x22c55e);
+      addWheelButton(0.088, -0.018, 0xf59e0b);
+
+      const dial = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.018, 0.018, 12), brushedAlum);
+      dial.rotation.x = Math.PI / 2;
+      dial.position.set(0, -0.052, 0.016);
+      steeringWheelMesh.add(dial);
+      const dialDot = new THREE.Mesh(new THREE.BoxGeometry(0.005, 0.014, 0.022), gripAccentMat);
+      dialDot.position.set(0, -0.048, 0.016);
+      steeringWheelMesh.add(dialDot);
+
+      const paddleGeo = new THREE.BoxGeometry(0.065, 0.095, 0.008);
+      const paddleL = new THREE.Mesh(paddleGeo, brushedAlum);
+      paddleL.position.set(-0.135, 0.035, -0.035);
+      paddleL.rotation.y = 0.22;
+      steeringWheelMesh.add(paddleL);
+
+      const paddleR = new THREE.Mesh(paddleGeo, brushedAlum);
+      paddleR.position.set(0.135, 0.035, -0.035);
+      paddleR.rotation.y = -0.22;
+      steeringWheelMesh.add(paddleR);
+
+      cockpitRig.add(steeringWheelMesh);
+
+      hoodShieldMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(1.65, 0.55, 2.5),
+        new THREE.MeshBasicMaterial({ color: 0xfacc15, transparent: true, opacity: 0.0, wireframe: true })
+      );
+      hoodShieldMesh.position.set(0, 0.72, -1.65);
+      cockpitRig.add(hoodShieldMesh);
+
+      scene.add(cockpitRig);
+    }
+
+    function createAIKartMesh(bodyColor, accentColor) {
+      const group = new THREE.Group();
+      const bodyMat = new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.3, metalness: 0.35 });
+      const accentMat = new THREE.MeshStandardMaterial({ color: accentColor, roughness: 0.3, metalness: 0.2 });
+      const darkMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.8 });
+
+      const chassis = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.7, 3.6), bodyMat);
+      chassis.position.set(0, 0.65, 0);
+      group.add(chassis);
+
+      const nose = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.45, 1.1), accentMat);
+      nose.position.set(0, 0.52, -2.0);
+      group.add(nose);
+
+      const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.52, 12, 12), accentMat);
+      helmet.position.set(0, 1.48, 0.2);
+      group.add(helmet);
+
+      const visor = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.24, 0.4), darkMat);
+      visor.position.set(0, 1.5, -0.15);
+      group.add(visor);
+
+      const spoilerBar = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.14, 0.5), accentMat);
+      spoilerBar.position.set(0, 1.45, 1.65);
+      group.add(spoilerBar);
+      const strutGeo = new THREE.BoxGeometry(0.12, 0.55, 0.2);
+      const strutL = new THREE.Mesh(strutGeo, darkMat);
+      strutL.position.set(-0.75, 1.15, 1.65);
+      group.add(strutL);
+      const strutR = new THREE.Mesh(strutGeo, darkMat);
+      strutR.position.set(0.75, 1.15, 1.65);
+      group.add(strutR);
+
+      const wheelGeo = new THREE.CylinderGeometry(0.48, 0.48, 0.4, 12);
+      [[-1.12, 0.48, -1.2], [1.12, 0.48, -1.2], [-1.18, 0.52, 1.2], [1.18, 0.52, 1.2]].forEach(([x, y, z]) => {
+        const w = new THREE.Mesh(wheelGeo, darkMat);
+        w.rotation.z = Math.PI / 2;
+        w.position.set(x, y, z);
+        group.add(w);
+      });
+
+      return group;
+    }
+
+    function createObstacleMesh(type) {
+      const g = new THREE.Group();
+
+      if (type === 'barrier') {
+        const legMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.7 });
+        const legGeo = new THREE.BoxGeometry(0.22, 1.1, 0.25);
+        const legL = new THREE.Mesh(legGeo, legMat); legL.position.set(-1.5, 0.55, 0); g.add(legL);
+        const legR = new THREE.Mesh(legGeo, legMat); legR.position.set(1.5, 0.55, 0); g.add(legR);
+
+        const canvasTex = document.createElement('canvas');
+        canvasTex.width = 256; canvasTex.height = 64;
+        const c = canvasTex.getContext('2d');
+        c.fillStyle = '#ffffff'; c.fillRect(0, 0, 256, 64);
+        c.fillStyle = '#ef4444';
+        for (let i = -64; i < 320; i += 48) {
+          c.beginPath(); c.moveTo(i, 0); c.lineTo(i + 24, 0); c.lineTo(i + 4, 64); c.lineTo(i - 20, 64); c.fill();
+        }
+        const boardMat = new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(canvasTex) });
+        const board = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.95, 0.25), boardMat);
+        board.position.set(0, 1.35, 0);
+        g.add(board);
+
+        const beaconMat = new THREE.MeshBasicMaterial({ color: 0xfde047 });
+        const bL = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 8), beaconMat); bL.position.set(-1.4, 1.98, 0); g.add(bL);
+        const bR = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 8), beaconMat); bR.position.set(1.4, 1.98, 0); g.add(bR);
+      } else if (type === 'cone') {
+        const orangeMat = new THREE.MeshStandardMaterial({ color: 0xf97316, roughness: 0.5 });
+        const whiteMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, emissive: 0x334155 });
+        [-0.75, 0.75].forEach(dx => {
+          const base = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.12, 0.9), orangeMat);
+          base.position.set(dx, 0.06, 0);
+          g.add(base);
+          const cone = new THREE.Mesh(new THREE.ConeGeometry(0.36, 1.25, 10), orangeMat);
+          cone.position.set(dx, 0.68, 0);
+          g.add(cone);
+          const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.24, 0.24, 10), whiteMat);
+          ring.position.set(dx, 0.78, 0);
+          g.add(ring);
+        });
+      } else if (type === 'crate') {
+        const crateCanvas = document.createElement('canvas');
+        crateCanvas.width = 128; crateCanvas.height = 128;
+        const c = crateCanvas.getContext('2d');
+        c.fillStyle = '#d97706'; c.fillRect(0, 0, 128, 128);
+        c.strokeStyle = '#78350f'; c.lineWidth = 14;
+        c.strokeRect(7, 7, 114, 114);
+        c.beginPath(); c.moveTo(10, 10); c.lineTo(118, 118); c.moveTo(118, 10); c.lineTo(10, 118); c.stroke();
+        const mat = new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(crateCanvas), roughness: 0.8 });
+        const box = new THREE.Mesh(new THREE.BoxGeometry(1.9, 1.9, 1.9), mat);
+        box.position.set(0, 0.95, 0);
+        g.add(box);
+      } else if (type === 'banana') {
+        const yellowMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.35, emissive: 0x422006 });
+        const stemMat = new THREE.MeshStandardMaterial({ color: 0x713f12 });
+        for (let a = 0; a < 3; a++) {
+          const angle = (a / 3) * Math.PI * 2;
+          const petal = new THREE.Mesh(new THREE.ConeGeometry(0.28, 1.15, 6), yellowMat);
+          petal.position.set(Math.cos(angle) * 0.4, 0.32, Math.sin(angle) * 0.4);
+          petal.rotation.z = -Math.cos(angle) * 0.85;
+          petal.rotation.x = Math.sin(angle) * 0.85;
+          g.add(petal);
+        }
+        const center = new THREE.Mesh(new THREE.ConeGeometry(0.25, 0.95, 6), yellowMat);
+        center.position.set(0, 0.52, 0);
+        g.add(center);
+        const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.25, 6), stemMat);
+        stem.position.set(0, 1.0, 0);
+        g.add(stem);
+      }
+      return g;
+    }
+
+    /* ==========================================================================
+       6. 3D SPLINE TRACK BUILDER (ROAD, CURBS, SCENERY, OBSTACLES & MINIMAP)
+       ========================================================================== */
+    function getFrameAtDistance(s) {
+      const n = trackFrames.length;
+      if (n === 0) return null;
+      const wrapped = ((s % trackLength) + trackLength) % trackLength;
+      const exactIdx = (wrapped / trackLength) * n;
+      const i0 = Math.floor(exactIdx) % n;
+      const i1 = (i0 + 1) % n;
+      const alpha = exactIdx - Math.floor(exactIdx);
+
+      const f0 = trackFrames[i0];
+      const f1 = trackFrames[i1];
+
+      return {
+        pos: new THREE.Vector3().lerpVectors(f0.pos, f1.pos, alpha),
+        tangent: new THREE.Vector3().lerpVectors(f0.tangent, f1.tangent, alpha).normalize(),
+        right: new THREE.Vector3().lerpVectors(f0.right, f1.right, alpha).normalize(),
+        up: new THREE.Vector3().lerpVectors(f0.up, f1.up, alpha).normalize(),
+        curvature: f0.curvature + (f1.curvature - f0.curvature) * alpha
+      };
+    }
+
+    function placeObjectOnTrack(mesh, s, lateral, yOffset = 0) {
+      const f = getFrameAtDistance(s);
+      if (!f) return;
+      mesh.position.copy(f.pos)
+        .addScaledVector(f.right, lateral)
+        .addScaledVector(f.up, yOffset);
+      // Object3D.lookAt() aligns local +Z toward target, so targeting (pos - tangent)
+      // points local -Z (camera & kart nose) forward along +f.tangent and +X along +f.right
+      const lookTarget = mesh.position.clone().sub(f.tangent);
+      mesh.up.copy(f.up);
+      mesh.lookAt(lookTarget);
+    }
+
+    function buildTrack3D(trackIndex) {
+      // Clear previous track group & effects cleanly
+      if (trackGroup) {
+        scene.remove(trackGroup);
+        trackGroup = null;
+      }
+      activeProjectiles.forEach(p => scene.remove(p.mesh));
+      activeProjectiles = [];
+      activeEffects.forEach(e => scene.remove(e.mesh));
+      activeEffects = [];
+
+      const cfg = TRACK_CONFIGS[trackIndex] || TRACK_CONFIGS[0];
+      trackGroup = new THREE.Group();
+
+      // Sky & Atmospheric Fog
+      scene.background = new THREE.Color(cfg.skyColor);
+      scene.fog = new THREE.FogExp2(cfg.fogColor, trackIndex === 3 ? 0.0024 : 0.0018);
+
+      // Lighting for this Track
+      const hemi = new THREE.HemisphereLight(cfg.ambientColor, cfg.groundColor, 0.85);
+      trackGroup.add(hemi);
+      const sun = new THREE.DirectionalLight(cfg.sunColor, 1.05);
+      sun.position.set(120, 220, 80);
+      trackGroup.add(sun);
+
+      // Large Ground Plane beneath track
+      const groundGeo = new THREE.PlaneGeometry(2400, 2400);
+      const groundMat = new THREE.MeshStandardMaterial({ color: cfg.groundColor, roughness: 0.95 });
+      const ground = new THREE.Mesh(groundGeo, groundMat);
+      ground.rotation.x = -Math.PI / 2;
+      ground.position.y = -2.2;
+      trackGroup.add(ground);
+
+      // Build Closed Catmull-Rom 3D Spline
+      const controlPts = cfg.points.map(([x, y, z]) => new THREE.Vector3(x, y, z));
+      trackCurve = new THREE.CatmullRomCurve3(controlPts, true, 'catmullrom', 0.5);
+      trackLength = trackCurve.getLength();
+
+      // Precompute 420 evenly spaced frames along the track
+      const SEGMENTS = 420;
+      trackFrames = [];
+      for (let i = 0; i < SEGMENTS; i++) {
+        const u = i / SEGMENTS;
+        const pos = trackCurve.getPointAt(u);
+        const tangent = trackCurve.getTangentAt(u).normalize();
+        const right = new THREE.Vector3().crossVectors(tangent, WORLD_UP).normalize();
+        const up = new THREE.Vector3().crossVectors(right, tangent).normalize();
+        trackFrames.push({ pos, tangent, right, up, curvature: 0 });
+      }
+      // Compute horizontal signed curvature for centrifugal steering feel
+      for (let i = 0; i < SEGMENTS; i++) {
+        const prev = trackFrames[(i - 1 + SEGMENTS) % SEGMENTS].tangent;
+        const next = trackFrames[(i + 1) % SEGMENTS].tangent;
+        const crossY = prev.z * next.x - prev.x * next.z;
+        trackFrames[i].curvature = crossY;
+      }
+
+      // Helper to build a continuous ribbon BufferGeometry along the spline
+      function createRibbon(leftOffset, rightOffset, yOff, material) {
+        const positions = [];
+        const uvs = [];
+        const indices = [];
+
+        for (let i = 0; i <= SEGMENTS; i++) {
+          const f = trackFrames[i % SEGMENTS];
+          const pL = f.pos.clone().addScaledVector(f.right, leftOffset).addScaledVector(f.up, yOff);
+          const pR = f.pos.clone().addScaledVector(f.right, rightOffset).addScaledVector(f.up, yOff);
+
+          positions.push(pL.x, pL.y, pL.z, pR.x, pR.y, pR.z);
+          const v = i / SEGMENTS;
+          uvs.push(0, v, 1, v);
+
+          if (i < SEGMENTS) {
+            const base = i * 2;
+            indices.push(base, base + 1, base + 2);
+            indices.push(base + 1, base + 3, base + 2);
+          }
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+        geo.setIndex(indices);
+        geo.computeVertexNormals();
+        return new THREE.Mesh(geo, material);
+      }
+
+      // Main Asphalt Road
+      const roadMat = new THREE.MeshStandardMaterial({
+        map: createRoadTexture(cfg.asphalt),
+        roughness: 0.78,
+        metalness: 0.08
+      });
+      trackGroup.add(createRibbon(-ROAD_HALF_WIDTH, ROAD_HALF_WIDTH, 0.05, roadMat));
+
+      // Left & Right Raised Rumble Curbs
+      const curbMat = new THREE.MeshStandardMaterial({
+        map: createCurbTexture(cfg.curbA, cfg.curbB),
+        roughness: 0.6
+      });
+      trackGroup.add(createRibbon(-ROAD_HALF_WIDTH - 1.8, -ROAD_HALF_WIDTH, 0.14, curbMat));
+      trackGroup.add(createRibbon(ROAD_HALF_WIDTH, ROAD_HALF_WIDTH + 1.8, 0.14, curbMat));
+
+      // Elevated road embankment skirt
+      const skirtMat = new THREE.MeshStandardMaterial({ color: cfg.groundColor, roughness: 0.95 });
+      trackGroup.add(createRibbon(-ROAD_HALF_WIDTH - 18, -ROAD_HALF_WIDTH - 1.6, -1.6, skirtMat));
+      trackGroup.add(createRibbon(ROAD_HALF_WIDTH + 1.6, ROAD_HALF_WIDTH + 18, -1.6, skirtMat));
+
+      // Start / Finish Checkered Strip & Overhead 3D Gantry Arch
+      const finishStrip = new THREE.Mesh(
+        new THREE.PlaneGeometry(ROAD_WIDTH, 5),
+        new THREE.MeshStandardMaterial({ map: createCheckeredTexture(), roughness: 0.5 })
+      );
+      finishStrip.rotation.x = -Math.PI / 2;
+      const gantry = new THREE.Group();
+      gantry.add(finishStrip);
+
+      const pillarMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.6, roughness: 0.3 });
+      const postL = new THREE.Mesh(new THREE.BoxGeometry(1.4, 11, 1.4), pillarMat);
+      postL.position.set(-ROAD_HALF_WIDTH - 1.5, 5.5, 0);
+      gantry.add(postL);
+      const postR = new THREE.Mesh(new THREE.BoxGeometry(1.4, 11, 1.4), pillarMat);
+      postR.position.set(ROAD_HALF_WIDTH + 1.5, 5.5, 0);
+      gantry.add(postR);
+
+      const banner = new THREE.Mesh(
+        new THREE.BoxGeometry(ROAD_WIDTH + 4.4, 2.6, 1.2),
+        new THREE.MeshStandardMaterial({ map: createCheckeredTexture() })
+      );
+      banner.position.set(0, 10.5, 0);
+      gantry.add(banner);
+
+      placeObjectOnTrack(gantry, 2, 0, 0.12);
+      trackGroup.add(gantry);
+
+      // Roadside 3D Scenery Props
+      buildTrackScenery(cfg.sceneryType);
+
+      // Build 3D Obstacles & Boost/Oil Track Pads
+      buildTrackHazardsAndPads(trackIndex);
+
+      // Build AI Rival 3D Karts
+      aiRacers = AI_CONFIGS.map((aiCfg, idx) => {
+        const mesh = createAIKartMesh(aiCfg.bodyColor, aiCfg.accentColor);
+        trackGroup.add(mesh);
+        return {
+          ...aiCfg,
+          mesh,
+          s: (5 - idx) * 14 + 12,
+          lateral: aiCfg.laneBias,
+          speed: 0,
+          lap: 1,
+          rank: idx + 2,
+          spinTimer: 0,
+          targetLane: aiCfg.laneBias
+        };
+      });
+
+      // Precompute True-Shape 2D Minimap Points
+      prepareMinimapGeometry();
+
+      scene.add(trackGroup);
+    }
+
+    function buildTrackScenery(sceneryType) {
+      const trunkMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.9 });
+      const leafMat = new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.8 });
+      const pineMat = new THREE.MeshStandardMaterial({ color: 0x0f766e, roughness: 0.85 });
+      const snowMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.6 });
+      const rockMat = new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.95 });
+      const neonPink = new THREE.MeshBasicMaterial({ color: 0xec4899 });
+      const neonCyan = new THREE.MeshBasicMaterial({ color: 0x06b6d4 });
+
+      const step = sceneryType === 'neon' ? 14 : 9;
+      for (let i = 6; i < trackFrames.length; i += step) {
+        const f = trackFrames[i];
+
+        if (sceneryType === 'neon') {
+          const arch = new THREE.Group();
+          const mat = (i % 28 === 0) ? neonPink : neonCyan;
+          const postL = new THREE.Mesh(new THREE.BoxGeometry(0.6, 12, 0.6), mat);
+          postL.position.set(-ROAD_HALF_WIDTH - 2.4, 6, 0);
+          arch.add(postL);
+          const postR = new THREE.Mesh(new THREE.BoxGeometry(0.6, 12, 0.6), mat);
+          postR.position.set(ROAD_HALF_WIDTH + 2.4, 6, 0);
+          arch.add(postR);
+          const bar = new THREE.Mesh(new THREE.BoxGeometry(ROAD_WIDTH + 5.4, 0.6, 0.6), mat);
+          bar.position.set(0, 12, 0);
+          arch.add(bar);
+          placeObjectOnTrack(arch, (i / trackFrames.length) * trackLength, 0, 0);
+          trackGroup.add(arch);
+        } else {
+          [-1, 1].forEach(side => {
+            const dist = ROAD_HALF_WIDTH + 6 + Math.random() * 14;
+            const pos = f.pos.clone().addScaledVector(f.right, side * dist);
+            const prop = new THREE.Group();
+            prop.position.set(pos.x, pos.y - 0.5, pos.z);
+
+            if (sceneryType === 'tree') {
+              const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.8, 4.5, 7), trunkMat);
+              trunk.position.y = 2.25;
+              prop.add(trunk);
+              const crown = new THREE.Mesh(new THREE.DodecahedronGeometry(3.2, 0), leafMat);
+              crown.position.y = 6.2;
+              prop.add(crown);
+            } else if (sceneryType === 'mesa') {
+              const h = 5 + Math.random() * 10;
+              const r = 3 + Math.random() * 4;
+              const rock = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.65, r, h, 7), rockMat);
+              rock.position.y = h / 2;
+              prop.add(rock);
+            } else if (sceneryType === 'pine') {
+              const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.6, 3.0, 6), trunkMat);
+              trunk.position.y = 1.5;
+              prop.add(trunk);
+              const cone1 = new THREE.Mesh(new THREE.ConeGeometry(3.0, 5.5, 7), pineMat);
+              cone1.position.y = 5.0;
+              prop.add(cone1);
+              const cone2 = new THREE.Mesh(new THREE.ConeGeometry(2.1, 4.0, 7), snowMat);
+              cone2.position.y = 7.6;
+              prop.add(cone2);
+            }
+            trackGroup.add(prop);
+          });
+        }
+      }
+    }
+
+    function buildTrackHazardsAndPads(trackIndex) {
+      trackObstacles = [];
+      trackPads = [];
+
+      const boostTex = createBoostPadTexture();
+      const boostMat = new THREE.MeshBasicMaterial({ map: boostTex });
+      const oilMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.1, metalness: 0.85 });
+
+      const spacing = Math.max(54, 70 - trackIndex * 4);
+      const lanes = [-6.2, 0, 6.2];
+
+      for (let s = 75; s < trackLength - 60; s += spacing) {
+        const lane = lanes[Math.floor(Math.random() * lanes.length)] + (Math.random() - 0.5) * 1.4;
+        const roll = Math.random();
+
+        if (roll < 0.25) {
+          const pad = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 7.5), boostMat);
+          pad.rotation.x = -Math.PI / 2;
+          const wrap = new THREE.Group();
+          wrap.add(pad);
+          placeObjectOnTrack(wrap, s, lane, 0.14);
+          trackGroup.add(wrap);
+          trackPads.push({ type: 'boostPad', s, lateral: lane, radius: 2.8, mesh: wrap, cooldown: 0 });
+        } else if (roll < 0.34) {
+          const oil = new THREE.Mesh(new THREE.CircleGeometry(2.6, 14), oilMat);
+          oil.rotation.x = -Math.PI / 2;
+          const wrap = new THREE.Group();
+          wrap.add(oil);
+          placeObjectOnTrack(wrap, s, lane, 0.13);
+          trackGroup.add(wrap);
+          trackPads.push({ type: 'oilSlick', s, lateral: lane, radius: 2.5, mesh: wrap, cooldown: 0 });
+        } else {
+          const obsTypes = ['barrier', 'cone', 'crate', 'banana'];
+          const obsType = obsTypes[Math.floor(Math.random() * obsTypes.length)];
+          const radiusMap = { barrier: 2.4, cone: 1.8, crate: 1.8, banana: 1.6 };
+          const mesh = createObstacleMesh(obsType);
+          placeObjectOnTrack(mesh, s, lane, 0.08);
+          trackGroup.add(mesh);
+          trackObstacles.push({
+            type: obsType,
+            s,
+            lateral: lane,
+            radius: radiusMap[obsType],
+            mesh,
+            hitCooldown: 0
+          });
+        }
+      }
+    }
+
+    /* ==========================================================================
+       7. 3D PROJECTILES & EXPLOSION EFFECTS
+       ========================================================================== */
+    function spawnHomingShell(targetAI) {
+      const shell = new THREE.Group();
+      const body = new THREE.Mesh(
+        new THREE.SphereGeometry(0.75, 12, 12),
+        new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0x991b1b, roughness: 0.25 })
+      );
+      shell.add(body);
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(0.85, 0.14, 8, 16),
+        new THREE.MeshBasicMaterial({ color: 0xfef08a })
+      );
+      ring.rotation.x = Math.PI / 2;
+      shell.add(ring);
+      scene.add(shell);
+
+      activeProjectiles.push({
+        mesh: shell,
+        s: player.s + 6,
+        lateral: player.lateral,
+        speed: Math.max(player.speed + 85, 220),
+        target: targetAI,
+        life: 4.5
+      });
+    }
+
+    function spawnShockwaveEffect() {
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(1.5, 2.8, 32),
+        new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide, transparent: true, opacity: 0.9 })
+      );
+      ring.rotation.x = -Math.PI / 2;
+      const wrap = new THREE.Group();
+      wrap.add(ring);
+      placeObjectOnTrack(wrap, player.s, player.lateral, 0.8);
+      scene.add(wrap);
+      activeEffects.push({ type: 'ring', mesh: wrap, age: 0, maxAge: 0.65 });
+    }
+
+    function spawnSmashBurst(worldPos, colorHex) {
+      const group = new THREE.Group();
+      group.position.copy(worldPos);
+      const mat = new THREE.MeshBasicMaterial({ color: colorHex });
+      const shards = [];
+      for (let i = 0; i < 8; i++) {
+        const shard = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.45, 0.45), mat);
+        shard.userData.vel = new THREE.Vector3(
+          (Math.random() - 0.5) * 18,
+          6 + Math.random() * 10,
+          (Math.random() - 0.5) * 18
+        );
+        group.add(shard);
+        shards.push(shard);
+      }
+      scene.add(group);
+      activeEffects.push({ type: 'burst', mesh: group, shards, age: 0, maxAge: 0.6 });
+    }
+
+    function updateProjectilesAndEffects(dt) {
+      for (let i = activeProjectiles.length - 1; i >= 0; i--) {
+        const p = activeProjectiles[i];
+        p.life -= dt;
+        p.s = (p.s + p.speed * MPH_TO_MPS * dt) % trackLength;
+        if (p.target) {
+          p.lateral += (p.target.lateral - p.lateral) * Math.min(1, dt * 6);
+        }
+        placeObjectOnTrack(p.mesh, p.s, p.lateral, 0.95);
+        p.mesh.rotation.y += dt * 12;
+
+        let hit = false;
+        if (p.target) {
+          const ds = Math.abs(signedTrackDelta(p.s, p.target.s));
+          if (ds < 5.0 && Math.abs(p.lateral - p.target.lateral) < 3.5) {
+            p.target.spinTimer = 2.6;
+            p.target.speed *= 0.3;
+            spawnSmashBurst(p.mesh.position, 0xef4444);
+            playSound('crash');
+            showHitBanner(`HIT ${p.target.name.toUpperCase()}!`, "#f43f5e");
+            hit = true;
+          }
+        }
+        if (hit || p.life <= 0) {
+          scene.remove(p.mesh);
+          activeProjectiles.splice(i, 1);
+        }
+      }
+
+      for (let i = activeEffects.length - 1; i >= 0; i--) {
+        const e = activeEffects[i];
+        e.age += dt;
+        const t = e.age / e.maxAge;
+        if (e.type === 'ring') {
+          const scale = 1 + t * 24;
+          e.mesh.scale.set(scale, scale, scale);
+          e.mesh.children[0].material.opacity = Math.max(0, 1 - t);
+        } else if (e.type === 'burst') {
+          e.shards.forEach(s => {
+            s.position.addScaledVector(s.userData.vel, dt);
+            s.userData.vel.y -= 28 * dt;
+            s.rotation.x += dt * 8;
+            s.rotation.y += dt * 6;
+            const sc = Math.max(0.01, 1 - t);
+            s.scale.set(sc, sc, sc);
+          });
+        }
+        if (e.age >= e.maxAge) {
+          scene.remove(e.mesh);
+          activeEffects.splice(i, 1);
+        }
+      }
+    }
+
+    function signedTrackDelta(sA, sB) {
+      let d = sB - sA;
+      if (d > trackLength / 2) d -= trackLength;
+      if (d < -trackLength / 2) d += trackLength;
+      return d;
+    }
+
+    /* ==========================================================================
+       8. GRADE-BASED MATH ENGINE (GRADES 1–8)
+       ========================================================================== */
+    function setGrade(g) {
+      selectedGrade = g;
+      document.querySelectorAll('.grade-btn').forEach((btn, idx) => {
+        if (idx + 1 === g) {
+          btn.className = "grade-btn py-2 text-xs font-bold rounded-lg border border-blue-500 bg-blue-600 text-white font-bold transition";
+        } else {
+          btn.className = "grade-btn py-2 text-xs font-bold rounded-lg border border-slate-700 bg-slate-800 text-slate-300 hover:bg-blue-600 transition";
+        }
+      });
+      const desc = {
+        1: "Basic addition & subtraction (1–20).",
+        2: "2-digit addition & subtraction.",
+        3: "Multiplication tables & basic division.",
+        4: "Multi-digit multiplication, area & simple fractions.",
+        5: "Multiplication, division, order of operations & decimals.",
+        6: "Percentages, negative integers & exponents.",
+        7: "One- and two-step linear equations.",
+        8: "Pythagorean theorem & multi-step algebra."
+      };
+      document.getElementById('grade-desc').innerText = `Grade ${g}`;
+      document.getElementById('grade-info').innerText = desc[g];
+    }
+
+    function generateMathQuestion(grade) {
+      let qText = "", correctVal = 0;
+
+      switch (grade) {
+        case 1: {
+          const a = Math.floor(Math.random() * 10) + 3;
+          const b = Math.floor(Math.random() * 9) + 1;
+          if (Math.random() > 0.5) { qText = `${a} + ${b} = ?`; correctVal = a + b; }
+          else { qText = `${a + b} - ${a} = ?`; correctVal = b; }
+          break;
+        }
+        case 2: {
+          const a = Math.floor(Math.random() * 35) + 12;
+          const b = Math.floor(Math.random() * 35) + 10;
+          if (Math.random() > 0.5) { qText = `${a} + ${b} = ?`; correctVal = a + b; }
+          else { qText = `${a + b} - ${b} = ?`; correctVal = a; }
+          break;
+        }
+        case 3: {
+          const a = Math.floor(Math.random() * 9) + 2;
+          const b = Math.floor(Math.random() * 9) + 2;
+          if (Math.random() > 0.4) { qText = `${a} × ${b} = ?`; correctVal = a * b; }
+          else { qText = `${a * b} ÷ ${a} = ?`; correctVal = b; }
+          break;
+        }
+        case 4: {
+          const t = Math.floor(Math.random() * 3);
+          if (t === 0) {
+            const a = Math.floor(Math.random() * 14) + 10;
+            const b = Math.floor(Math.random() * 9) + 4;
+            qText = `${a} × ${b} = ?`; correctVal = a * b;
+          } else if (t === 1) {
+            const w = Math.floor(Math.random() * 8) + 4;
+            const h = Math.floor(Math.random() * 6) + 3;
+            qText = `Area of ${w} × ${h} rectangle?`; correctVal = w * h;
+          } else {
+            const a = Math.floor(Math.random() * 4) + 1;
+            const b = Math.floor(Math.random() * 4) + 1;
+            qText = `${a}/8 + ${b}/8 = ? / 8`; correctVal = a + b;
+          }
+          break;
+        }
+        case 5:
+        default: {
+          const t = Math.floor(Math.random() * 4);
+          if (t === 0) {
+            const a = Math.floor(Math.random() * 11) + 11;
+            const b = Math.floor(Math.random() * 9) + 6;
+            qText = `${a} × ${b} = ?`; correctVal = a * b;
+          } else if (t === 1) {
+            const a = Math.floor(Math.random() * 6) + 2;
+            const b = Math.floor(Math.random() * 6) + 3;
+            const c = Math.floor(Math.random() * 10) + 2;
+            qText = `${c} + ${a} × ${b} = ?`; correctVal = c + a * b;
+          } else if (t === 2) {
+            const a = (Math.floor(Math.random() * 45) + 12) / 10;
+            const b = (Math.floor(Math.random() * 35) + 11) / 10;
+            qText = `${a.toFixed(1)} + ${b.toFixed(1)} = ?`;
+            correctVal = parseFloat((a + b).toFixed(1));
+          } else {
+            const b = Math.floor(Math.random() * 8) + 4;
+            const ans = Math.floor(Math.random() * 14) + 6;
+            qText = `${b * ans} ÷ ${b} = ?`; correctVal = ans;
+          }
+          break;
+        }
+        case 6: {
+          const t = Math.floor(Math.random() * 3);
+          if (t === 0) {
+            const pct = [10, 20, 25, 50][Math.floor(Math.random() * 4)];
+            const val = (Math.floor(Math.random() * 10) + 2) * 20;
+            qText = `${pct}% of ${val} = ?`; correctVal = (pct / 100) * val;
+          } else if (t === 1) {
+            const a = Math.floor(Math.random() * 14) + 5;
+            const b = Math.floor(Math.random() * 12) - 18;
+            qText = `${a} + (${b}) = ?`; correctVal = a + b;
+          } else {
+            const a = Math.floor(Math.random() * 4) + 2;
+            qText = `${a}³ = ?`; correctVal = Math.pow(a, 3);
+          }
+          break;
+        }
+        case 7: {
+          const x = Math.floor(Math.random() * 9) + 2;
+          const m = Math.floor(Math.random() * 4) + 2;
+          const c = Math.floor(Math.random() * 10) + 1;
+          qText = `Solve: ${m}x + ${c} = ${m * x + c}`; correctVal = x;
+          break;
+        }
+        case 8: {
+          if (Math.random() > 0.5) {
+            const tr = [[3, 4, 5], [6, 8, 10], [5, 12, 13], [8, 15, 17]][Math.floor(Math.random() * 4)];
+            qText = `Right triangle legs ${tr[0]} & ${tr[1]}: hypotenuse?`; correctVal = tr[2];
+          } else {
+            const x = Math.floor(Math.random() * 8) + 2;
+            const a = Math.floor(Math.random() * 6) + 2;
+            const b = 3 * x - a;
+            qText = `Solve: 3x - ${a} = ${b}`; correctVal = x;
+          }
+          break;
+        }
+      }
+
+      const options = [correctVal];
+      let guard = 0;
+      while (options.length < 4 && guard < 100) {
+        guard++;
+        const delta = (Math.floor(Math.random() * 7) + 1) * (Math.random() > 0.5 ? 1 : -1);
+        let candidate = Number.isInteger(correctVal)
+          ? Math.round(correctVal + delta)
+          : parseFloat((correctVal + delta * 0.5).toFixed(1));
+        if ((correctVal <= 0 || candidate > 0) && !options.includes(candidate)) {
+          options.push(candidate);
+        }
+      }
+      options.sort(() => Math.random() - 0.5);
+      return { question: qText, correct: correctVal, options };
+    }
+
+    function triggerMathQuestion() {
+      if (!isRaceActive || isMathActive) return;
+
+      const warnEl = document.getElementById('math-warning');
+      warnEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-base md:text-lg"></i><span>MATH CHALLENGE INCOMING!</span>';
+      warnEl.classList.remove('hidden');
+      playSound('beep');
+
+      mathWarningTimeout = setTimeout(() => {
+        warnEl.classList.add('hidden');
+        if (!isRaceActive) return;
+
+        isMathActive = true;
+        questionsAskedRace++;
+        updateMathLiveHUD();
+        currentMathQuestion = generateMathQuestion(selectedGrade);
+
+        const modal = document.getElementById('math-modal');
+        document.getElementById('math-question-text').innerText = currentMathQuestion.question;
+        const grid = document.getElementById('math-options-grid');
+        grid.innerHTML = '';
+
+        currentMathQuestion.options.forEach((opt, idx) => {
+          const btn = document.createElement('button');
+          btn.className = "py-3.5 md:py-4 px-3.5 md:px-4 bg-slate-800 hover:bg-blue-600 border border-slate-700 rounded-2xl font-bold font-arcade text-xs md:text-sm text-white transition active:scale-95 flex items-center justify-between";
+          btn.innerHTML = `<span class="text-[10px] md:text-xs text-amber-400 border border-amber-400/50 px-2 py-0.5 rounded">${idx + 1}</span> <span>${opt}</span>`;
+          btn.onclick = () => handleMathAnswer(opt);
+          grid.appendChild(btn);
+        });
+
+        mathTimeRemaining = 18;
+        document.getElementById('math-timer-text').innerText = '18s';
+        document.getElementById('math-timer-bar').style.width = '100%';
+        modal.classList.remove('hidden');
+
+        if (mathTimerInterval) clearInterval(mathTimerInterval);
+        mathTimerInterval = setInterval(() => {
+          mathTimeRemaining -= 0.1;
+          const pct = Math.max(0, (mathTimeRemaining / 18) * 100);
+          document.getElementById('math-timer-bar').style.width = `${pct}%`;
+          document.getElementById('math-timer-text').innerText = `${Math.ceil(mathTimeRemaining)}s`;
+          if (mathTimeRemaining <= 0) {
+            clearInterval(mathTimerInterval);
+            handleMathAnswer(null);
+          }
+        }, 100);
+      }, 1500);
+    }
+
+    function handleMathAnswer(userAnswer) {
+      if (!isMathActive) return;
+      if (mathTimerInterval) clearInterval(mathTimerInterval);
+      isMathActive = false;
+
+      document.getElementById('math-modal').classList.add('hidden');
+      const isCorrect = userAnswer === currentMathQuestion.correct;
+
+      if (isCorrect) {
+        questionsCorrectRace++;
+        player.peakBoost += 8;
+        player.speed = Math.min(player.baseMaxSpeed + player.peakBoost + 18, player.speed + 20);
+        playSound('correct');
+
+        const items = ['rocket', 'homing', 'shockwave', 'star'];
+        player.item = items[Math.floor(Math.random() * items.length)];
+        updateItemHUD();
+        document.getElementById('hud-peak-boost').innerText = `+${player.peakBoost}`;
+        showHitBanner("CORRECT! +8 MPH & ITEM!", "#10b981");
+      } else {
+        playSound('wrong');
+        player.speed = Math.max(25, player.speed - 15);
+        showHitBanner("WRONG! SPEED DROP", "#ef4444");
+      }
+
+      updateMathLiveHUD();
+      scheduleNextMathQuestion(false);
+    }
+
+    function updateMathLiveHUD() {
+      const pct = questionsAskedRace > 0 ? Math.round((questionsCorrectRace / questionsAskedRace) * 100) : 100;
+      const el = document.getElementById('hud-math-live');
+      el.innerText = `${questionsCorrectRace}/${questionsAskedRace} (${pct}%)`;
+      el.className = pct >= 50 ? "text-[10px] md:text-[11px] font-bold text-emerald-400" : "text-[10px] md:text-[11px] font-bold text-rose-400";
+    }
+
+    function scheduleNextMathQuestion(isFirst = false) {
+      if (mathScheduleTimeout) clearTimeout(mathScheduleTimeout);
+      // Faster cadence delivers ~2 extra questions per 3-lap race (4-5 total)
+      const minSec = isFirst ? 9 : 11;
+      const rangeSec = isFirst ? 4 : 5;
+      const delayMs = (Math.floor(Math.random() * rangeSec) + minSec) * 1000;
+      mathScheduleTimeout = setTimeout(() => {
+        if (isRaceActive) triggerMathQuestion();
+      }, delayMs);
+    }
+
+    /* ==========================================================================
+       9. SPECIAL ITEMS & HUD FEEDBACK
+       ========================================================================== */
+    const ITEM_META = {
+      rocket:    { label: "ROCKET",   icon: "fa-rocket",     color: "text-amber-400",  border: "border-amber-400" },
+      homing:    { label: "SHELL",    icon: "fa-crosshairs", color: "text-rose-400",   border: "border-rose-400" },
+      shockwave: { label: "EMP WAVE", icon: "fa-bolt",       color: "text-cyan-400",   border: "border-cyan-400" },
+      star:      { label: "STAR",     icon: "fa-star",       color: "text-yellow-300", border: "border-yellow-300" }
+    };
+
+    function updateItemHUD() {
+      const btn = document.getElementById('hud-item-btn');
+      const icon = document.getElementById('hud-item-icon');
+      const name = document.getElementById('hud-item-name');
+
+      if (!player.item) {
+        btn.className = "pointer-events-auto flex flex-col items-center justify-center bg-slate-950/90 hover:bg-slate-900 backdrop-blur-md px-2.5 md:px-4 py-1.5 md:py-2 rounded-2xl border-2 border-slate-700 shadow-2xl transition active:scale-95 min-w-[82px] md:min-w-[116px] shrink-0";
+        icon.className = "fa-solid fa-box-open text-slate-500 text-sm md:text-lg";
+        name.className = "text-[10px] md:text-xs font-arcade text-slate-400";
+        name.innerText = "EMPTY";
+        return;
+      }
+      const m = ITEM_META[player.item];
+      btn.className = `pointer-events-auto flex flex-col items-center justify-center bg-slate-900/95 hover:bg-slate-800 backdrop-blur-md px-2.5 md:px-4 py-1.5 md:py-2 rounded-2xl border-2 ${m.border} shadow-2xl transition active:scale-95 min-w-[82px] md:min-w-[116px] shrink-0`;
+      icon.className = `fa-solid ${m.icon} ${m.color} text-sm md:text-lg`;
+      name.className = `text-[10px] md:text-xs font-arcade ${m.color}`;
+      name.innerText = m.label;
+    }
+
+    function triggerPlayerItem() {
+      if (!player.item || !isRaceActive || isMathActive) return;
+      const used = player.item;
+      player.item = null;
+      updateItemHUD();
+      playSound('item');
+
+      if (used === 'rocket') {
+        player.rocketTimer = 3.6;
+        playSound('boost');
+        showHitBanner("ROCKET TURBO!", "#f59e0b");
+      } else if (used === 'homing') {
+        let bestTarget = null;
+        let bestDist = Infinity;
+        aiRacers.forEach(ai => {
+          let ahead = ai.s - player.s;
+          if (ahead < 0) ahead += trackLength;
+          if (ahead > 2 && ahead < bestDist) {
+            bestDist = ahead;
+            bestTarget = ai;
+          }
+        });
+        spawnHomingShell(bestTarget || aiRacers[0]);
+        showHitBanner("HOMING SHELL FIRED!", "#f43f5e");
+      } else if (used === 'shockwave') {
+        spawnShockwaveEffect();
+        aiRacers.forEach(ai => {
+          ai.speed *= 0.45;
+          ai.spinTimer = Math.max(ai.spinTimer, 1.3);
+        });
+        showHitBanner("EMP SHOCKWAVE!", "#38bdf8");
+      } else if (used === 'star') {
+        player.shieldTimer = 5.5;
+        playSound('boost');
+        showHitBanner("INVINCIBILITY STAR!", "#fde047");
+      }
+    }
+
+    let bannerTimeout = null;
+    function showHitBanner(text, colorHex) {
+      const el = document.getElementById('hit-banner');
+      el.innerText = text;
+      el.style.color = colorHex;
+      el.style.borderColor = colorHex;
+      el.classList.remove('hidden', 'banner-animate');
+      void el.offsetWidth;
+      el.classList.add('banner-animate');
+      if (bannerTimeout) clearTimeout(bannerTimeout);
+      bannerTimeout = setTimeout(() => el.classList.add('hidden'), 1150);
+    }
+
+    /* ==========================================================================
+       10. PHYSICS, OBSTACLE COLLISIONS, AI & 50% MATH ENFORCEMENT
+       ========================================================================== */
+    function updatePhysics(dt) {
+      if (!isRaceActive || isMathActive || !trackFrames.length) return;
+
+      const boostBonus = (player.rocketTimer > 0 ? 48 : 0) + (player.shieldTimer > 0 ? 22 : 0);
+      const maxSpeed = player.baseMaxSpeed + player.peakBoost + boostBonus;
+
+      // Gas & Brake
+      if (player.rocketTimer > 0) {
+        player.speed = Math.min(maxSpeed, player.speed + 95 * dt);
+      } else if (keys.up || autoAccelerate) {
+        player.speed = Math.min(maxSpeed, player.speed + 48 * dt);
+      } else if (keys.down) {
+        player.speed = Math.max(0, player.speed - 80 * dt);
+      } else {
+        player.speed = Math.max(0, player.speed - 22 * dt);
+      }
+
+      // Steering + Centrifugal Curve Force
+      const frame = getFrameAtDistance(player.s);
+      const speedFactor = Math.min(1.0, player.speed / 70);
+      const steerRate = 17.5 * speedFactor;
+
+      if (keys.left) {
+        player.lateral -= steerRate * dt;
+        player.steerAngle = Math.max(-1, player.steerAngle - 5.5 * dt);
+      } else if (keys.right) {
+        player.lateral += steerRate * dt;
+        player.steerAngle = Math.min(1, player.steerAngle + 5.5 * dt);
+      } else if (tiltSteeringEnabled && tiltSensorActive) {
+        // Smooth, responsive analog tilt steering from phone/tablet rotation sensor
+        player.lateral += tiltSteerValue * steerRate * 1.15 * dt;
+        player.steerAngle += (tiltSteerValue - player.steerAngle) * Math.min(1, dt * 16);
+      } else {
+        player.steerAngle *= Math.pow(0.06, dt);
+      }
+
+      // Outward centrifugal pull on tight curves
+      if (frame) {
+        player.lateral += frame.curvature * player.speed * 0.44 * dt;
+      }
+
+      // Spinout wobble from Banana / Oil Slick
+      if (player.spinTimer > 0) {
+        player.spinTimer -= dt;
+        const wob = Math.sin(performance.now() * 0.025);
+        player.lateral += wob * 8.0 * dt;
+        player.steerAngle = wob * 1.1;
+      }
+
+      player.lateral = Math.max(-MAX_OFFROAD, Math.min(MAX_OFFROAD, player.lateral));
+
+      // Off-Road Grass Drag
+      const isOffroad = Math.abs(player.lateral) > ROAD_HALF_WIDTH + 0.6;
+      if (isOffroad && player.shieldTimer <= 0 && player.rocketTimer <= 0) {
+        player.speed = Math.max(32, player.speed - 68 * dt);
+        player.shakeTimer = Math.max(player.shakeTimer, 0.05);
+      }
+
+      // Advance distance & laps
+      player.s += player.speed * MPH_TO_MPS * dt;
+      if (player.s >= trackLength) {
+        player.s -= trackLength;
+        player.lap++;
+        if (player.lap > LAPS_PER_RACE) {
+          finishRace();
+          return;
+        }
+        playSound('lap');
+        document.getElementById('hud-lap').innerText = `${player.lap}`;
+        showHitBanner(player.lap === LAPS_PER_RACE ? "FINAL LAP!" : `LAP ${player.lap}!`, "#38bdf8");
+      }
+
+      // Decrement timers
+      if (player.rocketTimer > 0) player.rocketTimer -= dt;
+      if (player.shieldTimer > 0) player.shieldTimer -= dt;
+      if (player.shakeTimer > 0) player.shakeTimer -= dt;
+
+      // Boost Pads & Oil Slicks
+      for (let i = 0; i < trackPads.length; i++) {
+        const pad = trackPads[i];
+        if (pad.cooldown > 0) {
+          pad.cooldown -= dt;
+          continue;
+        }
+        if (Math.abs(signedTrackDelta(player.s, pad.s)) < 4.2 && Math.abs(player.lateral - pad.lateral) < pad.radius) {
+          pad.cooldown = 3.0;
+          if (pad.type === 'boostPad') {
+            player.speed = Math.min(maxSpeed + 35, player.speed + 42);
+            playSound('boost');
+            showHitBanner("BOOST PAD!", "#38bdf8");
+          } else if (pad.type === 'oilSlick' && player.shieldTimer <= 0 && player.rocketTimer <= 0) {
+            player.speed *= 0.68;
+            player.spinTimer = 0.75;
+            player.shakeTimer = 0.22;
+            playSound('slip');
+            showHitBanner("OIL SLICK!", "#c084fc");
+          }
+        }
+      }
+
+      // 3D Road Obstacles
+      for (let i = 0; i < trackObstacles.length; i++) {
+        const obs = trackObstacles[i];
+        if (obs.hitCooldown > 0) {
+          obs.hitCooldown -= dt;
+          obs.mesh.visible = obs.hitCooldown <= 0;
+          continue;
+        }
+        if (Math.abs(signedTrackDelta(player.s, obs.s)) < 2.8 && Math.abs(player.lateral - obs.lateral) < obs.radius) {
+          obs.hitCooldown = 5.0;
+          obs.mesh.visible = false;
+
+          if (player.shieldTimer > 0 || player.rocketTimer > 0) {
+            player.shakeTimer = 0.16;
+            spawnSmashBurst(obs.mesh.position, 0xfacc15);
+            playSound('smash');
+            showHitBanner("OBSTACLE SMASHED!", "#facc15");
+          } else if (obs.type === 'barrier') {
+            player.speed = Math.max(24, player.speed * 0.45);
+            player.lateral += (player.lateral >= obs.lateral ? 2.0 : -2.0);
+            player.shakeTimer = 0.4;
+            spawnSmashBurst(obs.mesh.position, 0xef4444);
+            playSound('crash');
+            showHitBanner("BARRIER CRASH!", "#ef4444");
+          } else if (obs.type === 'crate') {
+            player.speed = Math.max(28, player.speed * 0.58);
+            player.shakeTimer = 0.28;
+            spawnSmashBurst(obs.mesh.position, 0xd97706);
+            playSound('crash');
+            showHitBanner("CRATE SMASH!", "#f97316");
+          } else if (obs.type === 'cone') {
+            player.speed = Math.max(36, player.speed * 0.78);
+            player.shakeTimer = 0.16;
+            spawnSmashBurst(obs.mesh.position, 0xf97316);
+            playSound('crash');
+            showHitBanner("CONE HIT!", "#fb923c");
+          } else if (obs.type === 'banana') {
+            player.speed = Math.max(30, player.speed * 0.65);
+            player.spinTimer = 0.85;
+            player.shakeTimer = 0.2;
+            playSound('slip');
+            showHitBanner("BANANA SLIP!", "#facc15");
+          }
+        }
+      }
+
+      updateAIRacers(dt);
+      updateProjectilesAndEffects(dt);
+      calculateRanks();
+      enforceMathWinRequirement(dt);
+      updateLiveTelemetryHUD();
+    }
+
+    function updateAIRacers(dt) {
+      aiRacers.forEach(ai => {
+        if (ai.spinTimer > 0) {
+          ai.spinTimer -= dt;
+          ai.speed = Math.max(18, ai.speed - 90 * dt);
+        } else {
+          const paceWave = Math.sin(performance.now() * 0.0007 + ai.id * 1.7) * 5;
+          const targetSpd = ai.baseSpeed + currentTrackIndex * 1.5 + paceWave;
+          ai.speed += (targetSpd - ai.speed) * Math.min(1, dt * 2.2);
+        }
+
+        ai.targetLane = ai.laneBias;
+        for (let i = 0; i < trackObstacles.length; i++) {
+          const obs = trackObstacles[i];
+          if (obs.hitCooldown > 0) continue;
+          const ahead = signedTrackDelta(ai.s, obs.s);
+          if (ahead > 0 && ahead < 26 && Math.abs(ai.lateral - obs.lateral) < obs.radius + 1.6) {
+            ai.targetLane = obs.lateral > 0 ? -6.5 : 6.5;
+            break;
+          }
+        }
+        ai.lateral += (ai.targetLane - ai.lateral) * Math.min(1, dt * 3.2);
+
+        ai.s += ai.speed * MPH_TO_MPS * dt;
+        if (ai.s >= trackLength) {
+          ai.s -= trackLength;
+          ai.lap++;
+        }
+
+        if (ai.lap === player.lap && Math.abs(signedTrackDelta(player.s, ai.s)) < 3.4 && Math.abs(player.lateral - ai.lateral) < 2.2) {
+          if (player.shieldTimer > 0) {
+            ai.spinTimer = 2.0;
+            ai.speed *= 0.4;
+            playSound('smash');
+            showHitBanner(`SMASHED ${ai.name.toUpperCase()}!`, "#facc15");
+          } else {
+            const push = player.lateral >= ai.lateral ? 1 : -1;
+            player.lateral += push * 1.1;
+            ai.lateral -= push * 1.1;
+            player.shakeTimer = Math.max(player.shakeTimer, 0.14);
+          }
+        }
+      });
+    }
+
+    function calculateRanks() {
+      const all = [{ id: 'player', dist: (player.lap - 1) * trackLength + player.s }];
+      aiRacers.forEach(ai => all.push({ id: ai.id, dist: (ai.lap - 1) * trackLength + ai.s }));
+      all.sort((a, b) => b.dist - a.dist);
+
+      all.forEach((entry, idx) => {
+        const rank = idx + 1;
+        if (entry.id === 'player') {
+          player.rank = rank;
+        } else {
+          const ai = aiRacers.find(a => a.id === entry.id);
+          if (ai) ai.rank = rank;
+        }
+      });
+
+      const ord = ["1st", "2nd", "3rd", "4th", "5th", "6th"][player.rank - 1] || `${player.rank}th`;
+      document.getElementById('hud-pos').innerText = ord;
+    }
+
+    function enforceMathWinRequirement(dt) {
+      const accuracy = questionsAskedRace > 0 ? (questionsCorrectRace / questionsAskedRace) : 1.0;
+      if (player.lap === LAPS_PER_RACE && questionsAskedRace > 0 && accuracy < 0.5) {
+        const leadAI = aiRacers[0];
+        if (leadAI && (player.rank === 1 || ((leadAI.lap - 1) * trackLength + leadAI.s) < ((player.lap - 1) * trackLength + player.s + 22))) {
+          leadAI.spinTimer = 0;
+          leadAI.speed = Math.max(leadAI.speed, player.speed + 24);
+          const playerTotal = (player.lap - 1) * trackLength + player.s;
+          const aiTotal = (leadAI.lap - 1) * trackLength + leadAI.s;
+          if (player.s > trackLength * 0.65 && aiTotal < playerTotal + 18) {
+            leadAI.s += 38 * dt;
+            if (leadAI.s >= trackLength) { leadAI.s -= trackLength; leadAI.lap++; }
+          }
+        }
+      }
+    }
+
+    function updateLiveTelemetryHUD() {
+      document.getElementById('hud-speed').innerText = Math.round(player.speed);
+      const maxSpd = player.baseMaxSpeed + player.peakBoost;
+      const pct = Math.min(100, (player.speed / maxSpd) * 100);
+      const bar = document.getElementById('hud-rpm-bar');
+      bar.style.width = `${pct}%`;
+      bar.className = player.rocketTimer > 0
+        ? "h-full bg-amber-400 transition-all duration-75"
+        : (pct > 85 ? "h-full bg-rose-500 transition-all duration-75" : "h-full bg-emerald-400 transition-all duration-75");
+
+      const statusEl = document.getElementById('hud-status-text');
+      const fxEl = document.getElementById('screen-fx');
+      updateTiltVisuals();
+      if (player.shieldTimer > 0) {
+        statusEl.innerText = "STAR INVINCIBLE";
+        statusEl.className = "text-xs font-extrabold text-yellow-300 mt-0.5";
+        fxEl.classList.remove('hidden');
+        fxEl.style.boxShadow = "inset 0 0 80px rgba(250, 204, 21, 0.45)";
+      } else if (player.rocketTimer > 0) {
+        statusEl.innerText = "ROCKET TURBO!";
+        statusEl.className = "text-xs font-extrabold text-amber-400 mt-0.5";
+        fxEl.classList.remove('hidden');
+        fxEl.style.boxShadow = "inset 0 0 90px rgba(249, 115, 22, 0.45)";
+      } else if (player.spinTimer > 0) {
+        statusEl.innerText = "TRACTION LOST!";
+        statusEl.className = "text-xs font-extrabold text-rose-400 mt-0.5";
+        fxEl.classList.add('hidden');
+      } else {
+        statusEl.innerText = "NOMINAL";
+        statusEl.className = "text-xs font-extrabold text-emerald-400 mt-0.5";
+        fxEl.classList.add('hidden');
+      }
+    }
+
+    /* ==========================================================================
+       11. 3D COCKPIT CAMERA SYNC & TRUE-SHAPE MINIMAP RENDERER
+       ========================================================================== */
+    function updateThreeSceneVisuals(dt) {
+      if (!trackFrames.length || !cockpitRig) return;
+
+      placeObjectOnTrack(cockpitRig, player.s, player.lateral, 0.08);
+
+      if (steeringWheelMesh) {
+        steeringWheelMesh.rotation.z = -player.steerAngle * 0.95;
+      }
+
+      if (steeringWheelLEDs.length > 0) {
+        const maxSpd = Math.max(1, player.baseMaxSpeed + player.peakBoost);
+        const rpmRatio = Math.min(1.15, player.speed / maxSpd);
+        const litCount = Math.round(Math.min(1, rpmRatio) * steeringWheelLEDs.length);
+        const flashPhase = Math.floor(performance.now() / 80) % 2 === 0;
+
+        steeringWheelLEDs.forEach((led, idx) => {
+          if (player.shieldTimer > 0) {
+            led.material.color.setHSL(((performance.now() * 0.0025) + idx * 0.12) % 1, 1, 0.55);
+          } else if (player.rocketTimer > 0) {
+            led.material.color.setHex(flashPhase ? 0xfacc15 : 0xf97316);
+          } else if (idx < litCount) {
+            if (idx < 3) led.material.color.setHex(0x22c55e);
+            else if (idx < 6) led.material.color.setHex(0xfacc15);
+            else led.material.color.setHex(0xef4444);
+          } else {
+            led.material.color.setHex(0x1e293b);
+          }
+        });
+
+        const spdInt = Math.round(player.speed);
+        let gearStr = 'N';
+        if (player.rocketTimer > 0) gearStr = 'B';
+        else if (spdInt > 125) gearStr = '6';
+        else if (spdInt > 100) gearStr = '5';
+        else if (spdInt > 75) gearStr = '4';
+        else if (spdInt > 50) gearStr = '3';
+        else if (spdInt > 25) gearStr = '2';
+        else if (spdInt > 2) gearStr = '1';
+
+        const modeText = player.shieldTimer > 0 ? 'STAR SHIELD'
+          : (player.rocketTimer > 0 ? 'TURBO BOOST'
+          : (player.spinTimer > 0 ? 'SLIP!' : (player.item ? ITEM_META[player.item].label : 'RACE MODE')));
+        const accentColor = player.shieldTimer > 0 ? '#facc15'
+          : (player.rocketTimer > 0 ? '#f97316'
+          : (player.spinTimer > 0 ? '#ef4444' : '#38bdf8'));
+
+        updateWheelOLED(spdInt, gearStr, modeText, accentColor);
+      }
+
+      if (frontWheelLeft && frontWheelRight) {
+        frontWheelLeft.rotation.y = -player.steerAngle * 0.42;
+        frontWheelRight.rotation.y = -player.steerAngle * 0.42;
+        const spin = player.speed * dt * 0.45;
+        frontWheelLeft.children[0].rotation.x -= spin;
+        frontWheelRight.children[0].rotation.x -= spin;
+      }
+
+      if (hoodShieldMesh) {
+        if (player.shieldTimer > 0) {
+          hoodShieldMesh.material.opacity = 0.45;
+          hoodShieldMesh.material.color.setHSL((performance.now() * 0.002) % 1, 1, 0.55);
+        } else if (player.rocketTimer > 0) {
+          hoodShieldMesh.material.opacity = 0.35;
+          hoodShieldMesh.material.color.setHex(0xf97316);
+        } else {
+          hoodShieldMesh.material.opacity = 0;
+        }
+      }
+
+      const targetFov = getBaseFov() + Math.min(20, (player.speed / 160) * 14) + (player.rocketTimer > 0 ? 10 : 0);
+      camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 6);
+      camera.updateProjectionMatrix();
+
+      const targetRoll = -player.steerAngle * 0.055;
+      player.cameraRoll += (targetRoll - player.cameraRoll) * Math.min(1, dt * 7);
+      camera.rotation.z = player.cameraRoll;
+
+      if (player.shakeTimer > 0) {
+        const mag = Math.min(0.14, player.shakeTimer * 0.32);
+        camera.position.set(
+          (Math.random() - 0.5) * mag,
+          1.55 + (Math.random() - 0.5) * mag,
+          0.35
+        );
+      } else {
+        camera.position.set(0, 1.55, 0.35);
+      }
+
+      aiRacers.forEach(ai => {
+        placeObjectOnTrack(ai.mesh, ai.s, ai.lateral, 0.08);
+        if (ai.spinTimer > 0) {
+          ai.mesh.rotateY(performance.now() * 0.015);
+        }
+      });
+
+      for (let i = 0; i < trackObstacles.length; i++) {
+        if (trackObstacles[i].type === 'banana' && trackObstacles[i].mesh.visible) {
+          trackObstacles[i].mesh.rotation.y += dt * 1.6;
+        }
+      }
+    }
+
+    function prepareMinimapGeometry() {
+      minimapPoints = [];
+      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+      for (let i = 0; i < trackFrames.length; i += 3) {
+        const p = trackFrames[i].pos;
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.z < minZ) minZ = p.z;
+        if (p.z > maxZ) maxZ = p.z;
+      }
+      const span = Math.max(maxX - minX, maxZ - minZ, 1);
+      const pad = 22;
+      const size = 180 - pad * 2;
+      const offsetX = (size - (maxX - minX) / span * size) / 2 + pad;
+      const offsetZ = (size - (maxZ - minZ) / span * size) / 2 + pad;
+
+      minimapPoints.bounds = { minX, minZ, span, size, offsetX, offsetZ };
+      for (let i = 0; i < trackFrames.length; i += 3) {
+        const p = trackFrames[i].pos;
+        minimapPoints.push({
+          x: ((p.x - minX) / span) * size + offsetX,
+          y: ((p.z - minZ) / span) * size + offsetZ
+        });
+      }
+    }
+
+    function projectWorldToMinimap(pos) {
+      const b = minimapPoints.bounds;
+      if (!b) return { x: 90, y: 90 };
+      return {
+        x: ((pos.x - b.minX) / b.span) * b.size + b.offsetX,
+        y: ((pos.z - b.minZ) / b.span) * b.size + b.offsetZ
+      };
+    }
+
+    function renderMinimap() {
+      if (!minimapCtx || minimapPoints.length === 0) return;
+      const w = minimapCanvas.width;
+      const h = minimapCanvas.height;
+      minimapCtx.clearRect(0, 0, w, h);
+
+      minimapCtx.beginPath();
+      minimapPoints.forEach((pt, idx) => {
+        if (idx === 0) minimapCtx.moveTo(pt.x, pt.y);
+        else minimapCtx.lineTo(pt.x, pt.y);
+      });
+      minimapCtx.closePath();
+      minimapCtx.strokeStyle = "#334155";
+      minimapCtx.lineWidth = 10;
+      minimapCtx.lineJoin = "round";
+      minimapCtx.stroke();
+
+      minimapCtx.strokeStyle = "#94a3b8";
+      minimapCtx.lineWidth = 3.5;
+      minimapCtx.stroke();
+
+      const startPt = minimapPoints[0];
+      minimapCtx.fillStyle = "#ffffff";
+      minimapCtx.fillRect(startPt.x - 4, startPt.y - 4, 8, 8);
+
+      aiRacers.forEach(ai => {
+        const f = getFrameAtDistance(ai.s);
+        if (!f) return;
+        const pt = projectWorldToMinimap(f.pos);
+        minimapCtx.fillStyle = ai.dotColor;
+        minimapCtx.beginPath();
+        minimapCtx.arc(pt.x, pt.y, 4.5, 0, Math.PI * 2);
+        minimapCtx.fill();
+      });
+
+      const pf = getFrameAtDistance(player.s);
+      if (pf) {
+        const pt = projectWorldToMinimap(pf.pos);
+        minimapCtx.fillStyle = "#38bdf8";
+        minimapCtx.beginPath();
+        minimapCtx.arc(pt.x, pt.y, 6.5, 0, Math.PI * 2);
+        minimapCtx.fill();
+        minimapCtx.strokeStyle = "#ffffff";
+        minimapCtx.lineWidth = 2;
+        minimapCtx.stroke();
+      }
+    }
+
+    /* ==========================================================================
+       12. TOURNAMENT & RACE FLOW CONTROLS
+       ========================================================================== */
+    function clearAllTimers() {
+      if (countdownTimer) clearInterval(countdownTimer);
+      if (mathTimerInterval) clearInterval(mathTimerInterval);
+      if (mathScheduleTimeout) clearTimeout(mathScheduleTimeout);
+      if (mathWarningTimeout) clearTimeout(mathWarningTimeout);
+    }
+
+    function startTournament() {
+      initAudio();
+      // Request iOS/iPadOS motion sensor permission directly inside this user tap gesture
+      if (tiltSteeringEnabled && !tiltSensorActive) {
+        requestTiltPermission(true);
+      }
+      currentTrackIndex = 0;
+      resetTournamentScores();
+      totalMathQuestionsTourn = 0;
+      totalMathCorrectTourn = 0;
+
+      document.getElementById('screen-title').classList.add('hidden');
+      document.getElementById('screen-hud').classList.remove('hidden');
+      startRace(0);
+    }
+
+    function startRace(trackIdx) {
+      clearAllTimers();
+      currentTrackIndex = trackIdx;
+      buildTrack3D(trackIdx);
+
+      // Reset stuck inputs and calibrate neutral tilt angle for the start of the race
+      keys.left = false;
+      keys.right = false;
+      if (tiltSteeringEnabled && tiltSensorActive) {
+        recenterTilt(true);
+      }
+
+      // Reset player physics & race counters
+      player.s = 0;
+      player.lateral = 0;
+      player.speed = 0;
+      player.peakBoost = 0;
+      player.lap = 1;
+      player.rank = 6;
+      player.item = null;
+      player.rocketTimer = 0;
+      player.shieldTimer = 0;
+      player.spinTimer = 0;
+      player.shakeTimer = 0;
+      player.steerAngle = 0;
+      player.cameraRoll = 0;
+
+      questionsAskedRace = 0;
+      questionsCorrectRace = 0;
+      isRaceActive = false;
+      isMathActive = false;
+
+      // Update HUD for this circuit
+      document.getElementById('hud-track-name').innerText = TRACK_CONFIGS[trackIdx].name;
+      document.getElementById('hud-race-num').innerText = `${trackIdx + 1}`;
+      document.getElementById('hud-lap').innerText = '1';
+      document.getElementById('hud-pos').innerText = '6th';
+      document.getElementById('hud-peak-boost').innerText = '+0';
+      document.getElementById('hud-speed').innerText = '0';
+      document.getElementById('hud-rpm-bar').style.width = '0%';
+      updateItemHUD();
+      updateMathLiveHUD();
+      updateTiltUI();
+      updateThreeSceneVisuals(0.016);
+      renderMinimap();
+
+      // 3-2-1-GO Race Start Countdown
+      const warnEl = document.getElementById('math-warning');
+      let count = 3;
+      warnEl.innerHTML = `<i class="fa-solid fa-flag-checkered text-base md:text-lg"></i><span>GET READY... ${count}</span>`;
+      warnEl.classList.remove('hidden');
+      playSound('beep');
+
+      countdownTimer = setInterval(() => {
+        count--;
+        if (count > 0) {
+          warnEl.innerHTML = `<i class="fa-solid fa-flag-checkered text-base md:text-lg"></i><span>GET READY... ${count}</span>`;
+          playSound('beep');
+        } else if (count === 0) {
+          warnEl.innerHTML = `<i class="fa-solid fa-bolt text-base md:text-lg"></i><span>GO!</span>`;
+          playSound('go');
+          isRaceActive = true;
+          raceStartTime = Date.now();
+          scheduleNextMathQuestion(true);
+        } else {
+          clearInterval(countdownTimer);
+          countdownTimer = null;
+          warnEl.classList.add('hidden');
+        }
+      }, 900);
+    }
+
+    function finishRace() {
+      clearAllTimers();
+      isRaceActive = false;
+      isMathActive = false;
+      document.getElementById('math-modal').classList.add('hidden');
+      document.getElementById('math-warning').classList.add('hidden');
+      document.getElementById('screen-fx').classList.add('hidden');
+
+      const elapsed = (Date.now() - raceStartTime) / 1000;
+      totalMathQuestionsTourn += questionsAskedRace;
+      totalMathCorrectTourn += questionsCorrectRace;
+
+      const accuracy = questionsAskedRace > 0 ? (questionsCorrectRace / questionsAskedRace) : 1.0;
+      let cappedByRule = false;
+      if (questionsAskedRace > 0 && accuracy < 0.5 && player.rank === 1) {
+        player.rank = 2;
+        if (aiRacers[0]) aiRacers[0].rank = 1;
+        cappedByRule = true;
+      }
+
+      const ptsTable = [15, 12, 10, 8, 6, 4];
+      tournamentScores["Player"].points += ptsTable[player.rank - 1] || 4;
+      aiRacers.forEach(ai => {
+        tournamentScores[ai.name].points += ptsTable[ai.rank - 1] || 4;
+      });
+
+      const mins = Math.floor(elapsed / 60);
+      const secs = (elapsed % 60).toFixed(1);
+      const timeStr = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+      const ord = ["1st", "2nd", "3rd", "4th", "5th", "6th"][player.rank - 1] || `${player.rank}th`;
+      const accPct = Math.round(accuracy * 100);
+
+      document.getElementById('post-race-rank').innerText = `${ord} Place`;
+      document.getElementById('post-race-time').innerText = timeStr;
+      document.getElementById('post-race-math-acc').innerText = `${accPct}% (${questionsCorrectRace}/${questionsAskedRace})`;
+
+      const noteEl = document.getElementById('post-race-rule-note');
+      if (cappedByRule || (questionsAskedRace > 0 && accuracy < 0.5)) {
+        noteEl.classList.remove('hidden');
+      } else {
+        noteEl.classList.add('hidden');
+      }
+
+      const standingsEl = document.getElementById('post-race-standings');
+      standingsEl.innerHTML = '';
+      Object.values(tournamentScores)
+        .sort((a, b) => b.points - a.points)
+        .forEach((entry, idx) => {
+          const row = document.createElement('div');
+          const isMe = entry.name.includes("Player");
+          row.className = `flex items-center justify-between p-2 rounded-xl border ${isMe ? 'bg-blue-950/60 border-blue-500/50' : 'bg-slate-900/80 border-slate-800'}`;
+          row.innerHTML = `<span class="font-bold ${isMe ? 'text-cyan-300' : 'text-slate-200'}">${idx + 1}. ${entry.name}</span><span class="font-arcade text-amber-400">${entry.points} pts</span>`;
+          standingsEl.appendChild(row);
+        });
+
+      const nextBtn = document.getElementById('btn-next-race');
+      nextBtn.innerHTML = currentTrackIndex + 1 < TOTAL_TRACKS
+        ? `NEXT RACE (${TRACK_CONFIGS[currentTrackIndex + 1].name}) <i class="fa-solid fa-chevron-right ml-1"></i>`
+        : `VIEW GRAND PRIX PODIUM <i class="fa-solid fa-trophy ml-1"></i>`;
+
+      document.getElementById('modal-post-race').classList.remove('hidden');
+    }
+
+    function nextTournamentRace() {
+      document.getElementById('modal-post-race').classList.add('hidden');
+      if (currentTrackIndex + 1 < TOTAL_TRACKS) {
+        startRace(currentTrackIndex + 1);
+      } else {
+        showFinalTournamentPodium();
+      }
+    }
+
+    function showFinalTournamentPodium() {
+      const sorted = Object.values(tournamentScores).sort((a, b) => b.points - a.points);
+      const myIdx = sorted.findIndex(s => s.name.includes("Player"));
+      const ord = ["1st", "2nd", "3rd", "4th", "5th", "6th"][myIdx] || `${myIdx + 1}th`;
+      const overallAcc = totalMathQuestionsTourn > 0
+        ? Math.round((totalMathCorrectTourn / totalMathQuestionsTourn) * 100)
+        : 100;
+
+      document.getElementById('final-tourn-rank').innerText = ord;
+      document.getElementById('final-tourn-pts').innerText = `${tournamentScores["Player"].points} pts`;
+      document.getElementById('final-tourn-acc').innerText = `${overallAcc}%`;
+      document.getElementById('tournament-trophy-text').innerText =
+        myIdx === 0 ? "Grand Prix Champion!" : `Finished ${ord} Overall — Great Racing!`;
+
+      document.getElementById('modal-tournament-end').classList.remove('hidden');
+    }
+
+    function submitFinalScore() {
+      const nameVal = document.getElementById('player-name-input').value.trim() || "Speed Racer";
+      const overallAcc = totalMathQuestionsTourn > 0
+        ? Math.round((totalMathCorrectTourn / totalMathQuestionsTourn) * 100)
+        : 100;
+
+      saveLeaderboardScore({
+        name: nameVal,
+        score: tournamentScores["Player"].points,
+        accuracy: overallAcc,
+        grade: selectedGrade,
+        rank: document.getElementById('final-tourn-rank').innerText
+      });
+
+      document.getElementById('modal-tournament-end').classList.add('hidden');
+      openLeaderboard();
+    }
+
+    function returnToMainMenu() {
+      clearAllTimers();
+      isRaceActive = false;
+      isMathActive = false;
+      document.getElementById('modal-tournament-end').classList.add('hidden');
+      document.getElementById('modal-post-race').classList.add('hidden');
+      document.getElementById('math-modal').classList.add('hidden');
+      document.getElementById('math-warning').classList.add('hidden');
+      document.getElementById('screen-hud').classList.add('hidden');
+      document.getElementById('screen-fx').classList.add('hidden');
+      document.getElementById('screen-title').classList.remove('hidden');
+    }
+
+    function openLeaderboard() {
+      const listEl = document.getElementById('leaderboard-list');
+      const scores = fetchLeaderboardScores();
+      listEl.innerHTML = '';
+
+      scores.forEach((s, idx) => {
+        const row = document.createElement('div');
+        row.className = "flex items-center justify-between bg-slate-900/90 p-3 rounded-2xl border border-slate-800 text-xs";
+        row.innerHTML = `
+          <div class="flex items-center space-x-3">
+            <span class="font-arcade text-amber-400 text-sm w-7">#${idx + 1}</span>
+            <div>
+              <div class="font-bold text-white text-sm">${escapeHtml(s.name)}</div>
+              <div class="text-[10px] text-slate-400">Grade ${s.grade || 5} &bull; ${s.accuracy}% Math Acc &bull; ${s.rank || ''}</div>
+            </div>
+          </div>
+          <div class="font-arcade text-emerald-400 font-bold text-sm">${s.score} pts</div>
+        `;
+        listEl.appendChild(row);
+      });
+      document.getElementById('modal-leaderboard').classList.remove('hidden');
+    }
+
+    function closeLeaderboard() {
+      document.getElementById('modal-leaderboard').classList.add('hidden');
+    }
+
+    function escapeHtml(str) {
+      return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+    }
+
+    /* ==========================================================================
+       13. INPUT LISTENERS & MAIN ANIMATION LOOP
+       ========================================================================== */
+    window.addEventListener('keydown', (e) => {
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' '].includes(e.key) && isRaceActive) {
+        e.preventDefault();
+      }
+      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = true;
+      if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = true;
+      if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') keys.up = true;
+      if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') keys.down = true;
+      if (e.key === ' ' || e.key === 'Shift') triggerPlayerItem();
+
+      if (isMathActive && ['1', '2', '3', '4'].includes(e.key)) {
+        const idx = parseInt(e.key, 10) - 1;
+        if (currentMathQuestion && currentMathQuestion.options[idx] !== undefined) {
+          handleMathAnswer(currentMathQuestion.options[idx]);
+        }
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = false;
+      if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = false;
+      if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') keys.up = false;
+      if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') keys.down = false;
+    });
+
+    // Reliable Mobile Touch Controls
+    const bindHold = (id, keyName) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('touchstart', (e) => { e.preventDefault(); keys[keyName] = true; }, { passive: false });
+      el.addEventListener('touchend', (e) => { e.preventDefault(); keys[keyName] = false; }, { passive: false });
+      el.addEventListener('touchcancel', () => { keys[keyName] = false; });
+      el.addEventListener('mousedown', () => { keys[keyName] = true; });
+      el.addEventListener('mouseup', () => { keys[keyName] = false; });
+      el.addEventListener('mouseleave', () => { keys[keyName] = false; });
+    };
+    bindHold('btn-touch-left', 'left');
+    bindHold('btn-touch-right', 'right');
+
+    document.getElementById('auto-accel-toggle').addEventListener('change', (e) => {
+      autoAccelerate = e.target.checked;
+    });
+
+    /* ==========================================================================
+       13B. DEVICE ROTATION SENSOR (TILT STEERING) FOR PHONES & TABLETS
+       ========================================================================== */
+    function getScreenOrientationAngle() {
+      let angle = 0;
+      if (window.screen && window.screen.orientation && typeof window.screen.orientation.angle === 'number') {
+        angle = window.screen.orientation.angle;
+      } else if (typeof window.orientation === 'number') {
+        angle = window.orientation;
+      }
+      return ((angle % 360) + 360) % 360;
+    }
+
+    // Maps world-UP vector projected into the device screen plane to right-edge-down tilt [-1, 1].
+    // This completely avoids Euler gimbal lock when holding phones or tablets upright (~60°-90°).
+    function mapUpVectorToRightDown(upX, upY, screenAngle) {
+      if (screenAngle === 90) return upY;
+      if (screenAngle === 180) return upX;
+      if (screenAngle === 270) return -upY;
+      return -upX; // 0° natural orientation (portrait on phones, landscape on landscape-native tablets)
+    }
+
+    function applyTiltRawDeg(rawDeg, sourceName) {
+      if (!Number.isFinite(rawDeg)) return;
+
+      const screenAngle = getScreenOrientationAngle();
+      if (screenAngle !== lastScreenAngle) {
+        lastScreenAngle = screenAngle;
+        tiltZeroDeg = 0;
+      }
+
+      tiltRawDeg = rawDeg;
+
+      if (!tiltSensorActive) {
+        tiltSensorActive = true;
+        tiltSensorSource = sourceName;
+        tiltNoSignalDetected = false;
+        tiltPermissionGranted = true;
+        if (tiltWatchdogTimer) {
+          clearTimeout(tiltWatchdogTimer);
+          tiltWatchdogTimer = null;
+        }
+        // Auto-zero comfortable initial holding offset if near level
+        if (Math.abs(rawDeg) < 16) tiltZeroDeg = rawDeg;
+        updateTiltUI(`Tilt active (${sourceName}) — tilt left/right to test!`);
+      }
+
+      const delta = (rawDeg - tiltZeroDeg) * (tiltInverted ? -1 : 1);
+      const absDelta = Math.abs(delta);
+      let targetSteer = 0;
+      if (absDelta > TILT_DEADZONE_DEG) {
+        const effective = (absDelta - TILT_DEADZONE_DEG) / (TILT_MAX_ANGLE_DEG - TILT_DEADZONE_DEG);
+        const curved = Math.pow(Math.min(1, effective), 1.08);
+        targetSteer = Math.sign(delta) * curved;
+      }
+      // Smooth low-pass filter to remove hand jitter without feeling sluggish
+      tiltSteerValue += (targetSteer - tiltSteerValue) * 0.42;
+      updateTiltVisuals();
+    }
+
+    function handleDeviceOrientation(e) {
+      if (typeof e.beta !== 'number' || typeof e.gamma !== 'number') return;
+      if (e.beta === 0 && e.gamma === 0 && e.alpha === 0) return;
+
+      const b = e.beta * DEG2RAD;
+      const g = e.gamma * DEG2RAD;
+      // World UP vector expressed in device local (X, Y) axes from Z-X'-Y'' Euler angles
+      const upX = -Math.cos(b) * Math.sin(g);
+      const upY = Math.sin(b);
+      const rightDown = Math.max(-1, Math.min(1, mapUpVectorToRightDown(upX, upY, getScreenOrientationAngle())));
+      const rawDeg = Math.asin(rightDown) * (180 / Math.PI);
+
+      // Prefer orientation whenever it delivers live data
+      tiltSensorSource = 'orientation';
+      applyTiltRawDeg(rawDeg, 'orientation');
+    }
+
+    function handleDeviceMotion(e) {
+      // Only use accelerometer fallback if orientation sensor isn't actively driving tilt
+      if (tiltSensorActive && tiltSensorSource === 'orientation') return;
+      const acc = e.accelerationIncludingGravity;
+      if (!acc || typeof acc.x !== 'number' || typeof acc.y !== 'number') return;
+
+      const ax = acc.x || 0;
+      const ay = acc.y || 0;
+      const az = acc.z || 0;
+      const mag = Math.hypot(ax, ay, az);
+      if (mag < 2.0) return;
+
+      // Android reports upward proper acceleration (+g along world UP); Apple reports inverted (-g)
+      const sign = isAppleTouch ? -1 : 1;
+      const upX = (ax / mag) * sign;
+      const upY = (ay / mag) * sign;
+      const rightDown = Math.max(-1, Math.min(1, mapUpVectorToRightDown(upX, upY, getScreenOrientationAngle())));
+      const rawDeg = Math.asin(rightDown) * (180 / Math.PI);
+      applyTiltRawDeg(rawDeg, 'accelerometer');
+    }
+
+    function startTiltWatchdog() {
+      if (tiltWatchdogTimer) clearTimeout(tiltWatchdogTimer);
+      tiltWatchdogTimer = setTimeout(() => {
+        if (tiltSteeringEnabled && !tiltSensorActive) {
+          tiltNoSignalDetected = true;
+          updateTiltUI("No sensor data received — your browser or preview frame may block motion sensors (touch arrows active).");
+        }
+      }, 2200);
+    }
+
+    function attachTiltListeners() {
+      tiltPermissionGranted = true;
+      tiltNoSignalDetected = false;
+      if (!tiltListenerAttached) {
+        window.addEventListener('deviceorientation', handleDeviceOrientation, true);
+        window.addEventListener('deviceorientationabsolute', handleDeviceOrientation, true);
+        window.addEventListener('devicemotion', handleDeviceMotion, true);
+        tiltListenerAttached = true;
+      }
+      if (!tiltSensorActive) {
+        startTiltWatchdog();
+      }
+      updateTiltUI(tiltSensorActive ? `Tilt active (${tiltSensorSource}) — tilt left/right!` : "Listening for tilt sensor... move your device slightly.");
+    }
+
+    function requestTiltPermission(fromUserGesture = false) {
+      const hasOrient = typeof window.DeviceOrientationEvent !== 'undefined';
+      const hasMotion = typeof window.DeviceMotionEvent !== 'undefined';
+      if (!hasOrient && !hasMotion) {
+        tiltSteeringEnabled = false;
+        updateTiltUI("Rotation sensors are not supported on this device.");
+        return;
+      }
+
+      const needsOrientPerm = hasOrient && typeof DeviceOrientationEvent.requestPermission === 'function';
+      const needsMotionPerm = hasMotion && typeof DeviceMotionEvent.requestPermission === 'function';
+
+      // iOS 13+ / iPadOS requires explicit permission inside a direct user tap
+      if (needsOrientPerm || needsMotionPerm) {
+        if (!fromUserGesture) {
+          updateTiltUI("Tap 'Allow Sensor' below or START GP to enable motion access.");
+          return;
+        }
+        const requests = [];
+        if (needsOrientPerm) {
+          requests.push(DeviceOrientationEvent.requestPermission().catch(() => 'denied'));
+        }
+        if (needsMotionPerm) {
+          requests.push(DeviceMotionEvent.requestPermission().catch(() => 'denied'));
+        }
+        Promise.all(requests).then((results) => {
+          if (results.includes('granted')) {
+            attachTiltListeners();
+          } else {
+            tiltNoSignalDetected = true;
+            updateTiltUI("Motion sensor blocked/denied — check Safari Motion settings or use touch arrows.");
+          }
+        });
+      } else {
+        // Android phones/tablets and standard browsers
+        attachTiltListeners();
+      }
+    }
+
+    function setTiltSteering(enabled, fromUserGesture = false) {
+      tiltSteeringEnabled = enabled;
+      if (enabled) {
+        requestTiltPermission(fromUserGesture);
+      } else {
+        tiltSteerValue = 0;
+        if (tiltWatchdogTimer) {
+          clearTimeout(tiltWatchdogTimer);
+          tiltWatchdogTimer = null;
+        }
+        updateTiltUI("Off — using arrow keys or on-screen touch buttons.");
+      }
+      updateTiltUI();
+    }
+
+    function toggleTiltFromHud() {
+      setTiltSteering(!tiltSteeringEnabled, true);
+      if (tiltSteeringEnabled) {
+        if (tiltSensorActive) {
+          recenterTilt(true);
+          showHitBanner("TILT STEERING ON!", "#38bdf8");
+        } else {
+          showHitBanner("CHECKING TILT SENSOR...", "#f59e0b");
+        }
+      } else {
+        showHitBanner("TOUCH / KEY STEERING", "#94a3b8");
+      }
+    }
+
+    function toggleInvertTilt() {
+      tiltInverted = !tiltInverted;
+      const menuBtn = document.getElementById('btn-tilt-invert-menu');
+      if (menuBtn) {
+        menuBtn.innerText = tiltInverted ? "Invert: On" : "Invert: Off";
+        menuBtn.className = tiltInverted
+          ? "px-2 py-1 rounded-lg bg-cyan-600/80 text-white border border-cyan-400 font-bold text-[10px] transition"
+          : "px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-bold text-[10px] transition";
+      }
+      const hudBtn = document.getElementById('btn-tilt-inv-hud');
+      if (hudBtn) {
+        hudBtn.className = tiltInverted
+          ? "px-1.5 py-0.5 rounded bg-cyan-600 text-white border border-cyan-300 text-[9px] font-bold"
+          : "px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 active:bg-cyan-600 text-slate-300 border border-slate-600 text-[9px] font-bold";
+      }
+      if (isRaceActive) {
+        showHitBanner(tiltInverted ? "TILT INVERTED!" : "TILT NORMAL", "#38bdf8");
+      }
+    }
+
+    function recenterTilt(silent = false) {
+      tiltZeroDeg = tiltRawDeg;
+      tiltSteerValue = 0;
+      updateTiltVisuals();
+      if (!silent) {
+        showHitBanner("TILT CENTERED!", "#38bdf8");
+      }
+    }
+
+    function updateTiltVisuals() {
+      const pctPos = Math.max(6, Math.min(94, 50 + tiltSteerValue * 44));
+      const relDeg = Math.round((tiltRawDeg - tiltZeroDeg) * (tiltInverted ? -1 : 1));
+      const degLabel = `${relDeg > 0 ? '+' : ''}${relDeg}°`;
+
+      const hudDot = document.getElementById('tilt-gauge-dot');
+      if (hudDot) hudDot.style.left = `${pctPos}%`;
+
+      const hudDeg = document.getElementById('tilt-hud-deg');
+      if (hudDeg) hudDeg.innerHTML = `<i class="fa-solid fa-compass mr-1"></i>${degLabel}`;
+
+      const testDot = document.getElementById('tilt-test-dot');
+      if (testDot) testDot.style.left = `${pctPos}%`;
+
+      const testDeg = document.getElementById('tilt-test-deg');
+      if (testDeg) {
+        if (tiltSensorActive) {
+          testDeg.innerText = `${degLabel} ✓`;
+          testDeg.className = "text-emerald-400";
+        } else if (tiltNoSignalDetected) {
+          testDeg.innerText = "Blocked / No Signal";
+          testDeg.className = "text-amber-400";
+        } else {
+          testDeg.innerText = "Waiting...";
+          testDeg.className = "text-cyan-400";
+        }
+      }
+    }
+
+    function updateTiltUI(statusMessage) {
+      const toggleEl = document.getElementById('tilt-steer-toggle');
+      if (toggleEl) toggleEl.checked = tiltSteeringEnabled;
+
+      const statusEl = document.getElementById('tilt-status-text');
+      if (statusEl && statusMessage) {
+        statusEl.innerText = statusMessage;
+      }
+
+      const testWrap = document.getElementById('tilt-test-bar-wrap');
+      if (testWrap) {
+        testWrap.classList.toggle('hidden', !tiltSteeringEnabled);
+      }
+
+      const allowBtn = document.getElementById('btn-tilt-allow');
+      if (allowBtn) {
+        allowBtn.classList.toggle('hidden', tiltSensorActive);
+      }
+
+      const hudBtn = document.getElementById('btn-tilt-hud');
+      if (hudBtn) {
+        hudBtn.className = tiltSteeringEnabled
+          ? (tiltSensorActive
+              ? "p-2 md:p-2.5 rounded-full bg-cyan-600/90 hover:bg-cyan-500 border border-cyan-300 text-white transition shadow-lg"
+              : "p-2 md:p-2.5 rounded-full bg-amber-600/85 hover:bg-amber-500 border border-amber-300 text-white transition shadow-lg")
+          : "p-2 md:p-2.5 rounded-full bg-slate-950/80 hover:bg-slate-800 border border-slate-700 text-slate-400 transition shadow-lg";
+      }
+
+      const mobileCtrl = document.getElementById('mobile-controls');
+      const tiltPanel = document.getElementById('tilt-hud-panel');
+      const statusBox = document.getElementById('hud-status-box');
+      const blockedPill = document.getElementById('tilt-blocked-pill');
+
+      if (tiltSteeringEnabled && tiltSensorActive) {
+        // Tilt is actively working: show compact live tilt bar + Invert + Center buttons
+        if (mobileCtrl) mobileCtrl.classList.add('hidden');
+        if (tiltPanel) tiltPanel.classList.remove('hidden');
+        if (statusBox) statusBox.classList.add('hidden');
+        if (blockedPill) blockedPill.classList.add('hidden');
+      } else if (isTouchDevice || tiltSteeringEnabled) {
+        // Touch device with tilt off OR sensor waiting/blocked: show reliable touch arrow buttons
+        if (mobileCtrl) mobileCtrl.classList.remove('hidden');
+        if (tiltPanel) tiltPanel.classList.add('hidden');
+        if (statusBox) statusBox.classList.add('hidden');
+        if (blockedPill) blockedPill.classList.toggle('hidden', !(tiltSteeringEnabled && tiltNoSignalDetected));
+      } else {
+        // Desktop browser
+        if (mobileCtrl) mobileCtrl.classList.add('hidden');
+        if (tiltPanel) tiltPanel.classList.add('hidden');
+        if (statusBox) statusBox.classList.remove('hidden');
+        if (blockedPill) blockedPill.classList.add('hidden');
+      }
+
+      updateTiltVisuals();
+    }
+
+    document.getElementById('tilt-steer-toggle').addEventListener('change', (e) => {
+      setTiltSteering(e.target.checked, true);
+    });
+
+    window.addEventListener('orientationchange', () => {
+      lastScreenAngle = getScreenOrientationAngle();
+      tiltZeroDeg = 0;
+    });
+
+    let lastTime = performance.now();
+    let titleDemoS = 0;
+
+    function animate(now) {
+      requestAnimationFrame(animate);
+      const dt = Math.min(0.08, (now - lastTime) / 1000);
+      lastTime = now;
+
+      if (isRaceActive) {
+        updatePhysics(dt);
+        updateThreeSceneVisuals(dt);
+        renderMinimap();
+      } else if (!document.getElementById('screen-title').classList.contains('hidden')) {
+        titleDemoS = (titleDemoS + 26 * dt) % trackLength;
+        player.s = titleDemoS;
+        player.lateral = Math.sin(now * 0.0008) * 3.5;
+        player.steerAngle = (tiltSteeringEnabled && tiltSensorActive) ? tiltSteerValue : Math.cos(now * 0.0008) * 0.35;
+        player.speed = 65;
+        updateThreeSceneVisuals(dt);
+      } else if (!document.getElementById('screen-hud').classList.contains('hidden')) {
+        // Keep steering wheel responsive to tilt during the 3-2-1 race countdown
+        if (tiltSteeringEnabled && tiltSensorActive) {
+          player.steerAngle += (tiltSteerValue - player.steerAngle) * Math.min(1, dt * 14);
+        }
+        updateThreeSceneVisuals(dt);
+      }
+
+      updateEngineSound();
+      if (renderer && scene && camera) {
+        renderer.render(scene, camera);
+      }
+    }
+
+    let initialized = false;
+    function bootGame() {
+      if (initialized) return;
+      initialized = true;
+      try {
+        minimapCanvas = document.getElementById('minimapCanvas');
+        minimapCtx = minimapCanvas.getContext('2d');
+        minimapCanvas.width = 180;
+        minimapCanvas.height = 180;
+
+        lastScreenAngle = getScreenOrientationAngle();
+        if (isTouchDevice) {
+          // Enable rotation sensor steering by default on phones & tablets
+          setTiltSteering(true, false);
+        } else {
+          updateTiltUI("Enable to steer with device rotation sensor.");
+        }
+
+        initThreeEngine();
+        setGrade(5);
+        buildTrack3D(0);
+        requestAnimationFrame(animate);
+      } catch (err) {
+        console.error("3D Engine Boot Error:", err);
+        const detail = escapeHtml(err && err.message ? err.message : String(err));
+        document.getElementById('three-viewport').innerHTML =
+          `<div class="flex flex-col items-center justify-center h-full text-center p-6 space-y-2 bg-slate-950">
+            <div class="text-rose-400 font-bold text-base">3D Engine Could Not Start</div>
+            <div class="text-slate-300 text-xs max-w-md">${detail}</div>
+            <div class="text-slate-500 text-[11px] max-w-md pt-1">Tip: On iPhone check Settings &rarr; Safari &rarr; Advanced &rarr; WebGL; on Android make sure Chrome is updated.</div>
+          </div>`;
+      }
+    }
+
+    window.addEventListener('load', bootGame);
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+      bootGame();
+    }
+  </script>
+</body>
+</html>
