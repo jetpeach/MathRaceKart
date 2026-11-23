@@ -47,6 +47,15 @@
       50% { transform: translateX(-50%) scale(1.05); }
     }
     .pulse-banner { animation: pulseBanner 0.7s infinite; }
+    @keyframes spinSwirl {
+      0% { transform: rotate(0deg) scale(1); }
+      50% { transform: rotate(180deg) scale(1.12); }
+      100% { transform: rotate(360deg) scale(1); }
+    }
+    .animate-spin-fast { animation: spinSwirl 0.55s linear infinite; }
+    .spinout-vignette {
+      background: radial-gradient(circle, transparent 42%, rgba(239, 68, 68, 0.44) 100%);
+    }
     .scroll-y-touch {
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
@@ -126,6 +135,16 @@
 
     <div id="incoming-q-banner" class="hidden fixed top-[16%] left-1/2 pulse-banner px-3.5 py-1 rounded-full bg-amber-500/90 text-slate-950 text-xs font-black tracking-wider uppercase shadow-lg z-20 pointer-events-none">
       ⚡ QUESTION INCOMING!
+    </div>
+
+    <!-- Spin-Out Graphic Overlay (triggered on missed questions) -->
+    <div id="spinout-overlay" class="hidden fixed inset-0 z-20 pointer-events-none flex items-center justify-center spinout-vignette">
+      <div class="flex flex-col items-center -mt-16">
+        <div class="text-5xl sm:text-6xl animate-spin-fast drop-shadow-[0_4px_16px_rgba(239,68,68,0.85)]">🌀</div>
+        <div class="mt-2 px-4 py-1.5 rounded-full bg-rose-600/90 border-2 border-amber-300 text-white text-sm sm:text-base font-black italic tracking-wider uppercase shadow-xl">
+          SPIN OUT! LOSING SPEED!
+        </div>
+      </div>
     </div>
 
     <!-- Bottom Row: Speedometer + Tilt Bar / Touch Controls -->
@@ -607,6 +626,10 @@
     peakBoost: 0, // earned from correct questions
     steerInput: 0,
     spinTimer: 0,
+    spinoutTimer: 0,
+    spinoutDuration: 2.35,
+    spinoutDir: 1,
+    spinSmokeCooldown: 0,
     boostTimer: 0,
     starTimer: 0,
     shakeTimer: 0,
@@ -620,6 +643,8 @@
   let boostPads = [];
   let projectiles = [];
   let shockwaves = [];
+  let smokePuffs = [];
+  let feedbackTimeout = null;
 
   /* =========================================================================
      4. WEB AUDIO SYNTHESIZER
@@ -688,6 +713,10 @@
       playTone(320, 0.18, 'square', 0.16, 640);
     } else if (kind === 'slip') {
       playTone(520, 0.28, 'sine', 0.14, 180);
+    } else if (kind === 'spinout') {
+      playTone(760, 0.36, 'sawtooth', 0.14, 340);
+      setTimeout(() => playTone(620, 0.44, 'sawtooth', 0.13, 220), 210);
+      setTimeout(() => playTone(460, 0.55, 'triangle', 0.15, 125), 500);
     } else if (kind === 'emp') {
       playTone(720, 0.4, 'sine', 0.18, 95);
     } else if (kind === 'shell') {
@@ -1013,16 +1042,16 @@
     const right = new THREE.Vector3().crossVectors(tangent, worldUp).normalize();
     const back = tangent.clone().negate();
     const up = new THREE.Vector3().crossVectors(back, right).normalize();
-    return { pos, tangent, right, up, back };
-  }
-
-  function placeOnTrack(obj, u, lateral = 0, yOffset = 0, extraBank = 0) {
+  function placeOnTrack(obj, u, lateral = 0, yOffset = 0, extraBank = 0, extraYaw = 0) {
     const f = getTrackFrame(u);
     obj.position.copy(f.pos)
       .addScaledVector(f.right, lateral)
       .addScaledVector(f.up, yOffset);
     const mat = new THREE.Matrix4().makeBasis(f.right, f.up, f.back);
     obj.quaternion.setFromRotationMatrix(mat);
+    if (extraYaw !== 0) {
+      obj.rotateY(extraYaw);
+    }
     if (extraBank !== 0) {
       obj.rotateZ(extraBank);
     }
@@ -1070,6 +1099,7 @@
     boostPads = [];
     projectiles = [];
     shockwaves = [];
+    smokePuffs = [];
 
     const cfg = TRACK_CONFIGS[trackIdx % TRACK_CONFIGS.length];
     scene.background = new THREE.Color(cfg.sky);
@@ -1573,11 +1603,65 @@
       fbEl.className = 'mt-3 rounded-xl px-3 py-2 text-xs sm:text-sm font-extrabold bg-emerald-950/80 border border-emerald-400/50 text-emerald-200';
       fbEl.textContent = `✅ Correct! +6 MPH Peak Speed & ${rewardItem.icon} ${rewardItem.name}! ${qObj.kind === 'knowledge' ? '• ' + qObj.fact : ''}`;
     } else {
-      player.speed = Math.max(40, player.speed - 15);
+      player.boostTimer = 0;
       playSfx('wrong');
-      fbEl.className = 'mt-3 rounded-xl px-3 py-2 text-xs sm:text-sm font-extrabold bg-rose-950/80 border border-rose-400/50 text-rose-200';
-      fbEl.textContent = `❌ ${chosen === '__TIMEOUT__' ? "Time's up!" : 'Not quite!'} Answer: ${qObj.ans}${qObj.kind === 'knowledge' ? ' — ' + qObj.fact : ''}`;
+      fbEl.className = 'mt-3 rounded-xl px-3 py-2.5 text-xs sm:text-sm font-extrabold bg-rose-950/90 border border-rose-400/60 text-rose-100 space-y-1';
+      const head = chosen === '__TIMEOUT__' ? "⏱️ Time's up!" : '❌ Not quite!';
+      const detail = qObj.kind === 'knowledge'
+        ? qObj.fact
+        : `Correct equation: ${qObj.fact}`;
+      fbEl.innerHTML = `
+        <div>${head} Answer: <span class="text-amber-300">${qObj.ans}</span></div>
+        <div class="text-[11px] sm:text-xs font-semibold text-rose-200/95">${detail}</div>
+        <div class="text-[10px] font-black uppercase tracking-wider text-amber-300 pt-0.5">🌀 Brace for spin-out!</div>
+      `;
     }
+    fbEl.classList.remove('hidden');
+
+    // Keep explanation visible longer on missed questions before returning to track & spinning out
+    const delayMs = isCorrect
+      ? (qObj.kind === 'knowledge' ? 1450 : 1050)
+      : (qObj.kind === 'knowledge' ? 3200 : 2600);
+
+    clearTimeout(feedbackTimeout);
+    feedbackTimeout = setTimeout(() => {
+      document.getElementById('question-modal').classList.add('hidden');
+      if (state.phase === 'question') {
+        state.phase = 'racing';
+        // +1 more question per race cadence (~9.0–11.5s between questions => ~5–6 per race)
+        state.nextQuestionTimer = 9.0 + Math.random() * 2.5;
+        state.warningShown = false;
+        if (!isCorrect) {
+          triggerMissedQuestionSpinout();
+        }
+      }
+    }, delayMs);
+  }
+
+  function triggerMissedQuestionSpinout() {
+    player.spinoutDuration = 2.35;
+    player.spinoutTimer = player.spinoutDuration;
+    player.spinoutDir = Math.random() < 0.5 ? 1 : -1;
+    player.spinSmokeCooldown = 0;
+    player.boostTimer = 0;
+    // Drop speed sharply so the spinout + recovery costs ~2.8–3.2 seconds of race time
+    player.speed = Math.min(player.speed * 0.45, 50);
+    player.shakeTimer = 0.75;
+    playSfx('spinout');
+  }
+
+  function spawnTireSmoke() {
+    const f = getTrackFrame(player.u);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xe2e8f0, transparent: true, opacity: 0.72 });
+    const puff = new THREE.Mesh(new THREE.SphereGeometry(0.42, 7, 7), mat);
+    const side = (Math.random() - 0.5) * 2.1;
+    puff.position.copy(f.pos)
+      .addScaledVector(f.right, player.lateral + side)
+      .addScaledVector(f.up, 0.45 + Math.random() * 0.25)
+      .addScaledVector(f.tangent, -0.6 + Math.random() * 1.4);
+    dynamicGroup.add(puff);
+    smokePuffs.push({ mesh: puff, age: 0, maxAge: 0.65 });
+  }
     fbEl.classList.remove('hidden');
 
     // Resume racing after brief readable feedback pause
@@ -2003,6 +2087,8 @@
     player.peakBoost = 0;
     player.steerInput = 0;
     player.spinTimer = 0;
+    player.spinoutTimer = 0;
+    player.spinSmokeCooldown = 0;
     player.boostTimer = 0;
     player.starTimer = 0;
     player.shakeTimer = 0;
@@ -2010,6 +2096,7 @@
     player.finished = false;
     player.finishRank = 0;
 
+    clearTimeout(feedbackTimeout);
     updateItemHud();
     syncControlVisibility();
     document.getElementById('hud-race-num').textContent = `Race ${raceIdx + 1}/4`;
@@ -2020,6 +2107,7 @@
     document.getElementById('results-modal').classList.add('hidden');
     document.getElementById('question-modal').classList.add('hidden');
     document.getElementById('incoming-q-banner').classList.add('hidden');
+    document.getElementById('spinout-overlay').classList.add('hidden');
     document.getElementById('hud-overlay').classList.remove('hidden');
 
     // Position karts at grid
@@ -2094,7 +2182,17 @@
     const brake = state.keys.down || state.touchBrake;
     const offRoad = Math.abs(player.lateral) > (ROAD_WIDTH * 0.52);
 
-    const boosting = player.boostTimer > 0 || player.starTimer > 0;
+    const isSpinningOut = player.spinoutTimer > 0;
+    if (isSpinningOut) {
+      player.spinoutTimer = Math.max(0, player.spinoutTimer - dt);
+      player.spinSmokeCooldown -= dt;
+      if (player.spinSmokeCooldown <= 0) {
+        player.spinSmokeCooldown = 0.065;
+        spawnTireSmoke();
+      }
+    }
+
+    const boosting = !isSpinningOut && (player.boostTimer > 0 || player.starTimer > 0);
     if (player.boostTimer > 0) player.boostTimer -= dt;
     if (player.starTimer > 0) player.starTimer -= dt;
     if (player.shakeTimer > 0) player.shakeTimer -= dt;
@@ -2103,13 +2201,48 @@
     if (boosting) targetMax += 42;
     if (offRoad && !boosting) targetMax *= 0.72;
 
-    if (gas && !brake) {
+    if (isSpinningOut) {
+      // Lock throttle and bleed speed down to a crawl while spinning out
+      player.speed = Math.max(16, player.speed - 44 * dt);
+    } else if (gas && !brake) {
       const accel = boosting ? 125 : 64;
       player.speed += accel * dt;
     } else if (brake) {
       player.speed -= 120 * dt;
     } else {
       player.speed -= 34 * dt;
+    }
+
+    if (!isSpinningOut && player.speed > targetMax) {
+      player.speed += (targetMax - player.speed) * Math.min(1, dt * 4.5);
+    }
+    player.speed = Math.max(0, player.speed);
+
+    // 3. Steering & Centrifugal Curve Drift
+    let rawSteer = computeSteeringValue();
+    if (player.spinTimer > 0) {
+      player.spinTimer -= dt;
+      rawSteer = Math.sin(player.spinTimer * 16) * 0.85;
+    }
+    player.steerInput += (rawSteer - player.steerInput) * Math.min(1, dt * 12);
+
+    const fNow = getTrackFrame(player.u);
+    const fAhead = getTrackFrame(player.u + 0.008);
+    const turnRate = fAhead.tangent.clone().sub(fNow.tangent).dot(fNow.right);
+    const speedRatio = player.speed / 130;
+
+    if (isSpinningOut) {
+      // Uncontrollable skid fishtail within road width during spin-out
+      const spinT = 1 - (player.spinoutTimer / player.spinoutDuration);
+      player.lateral += Math.sin(spinT * Math.PI * 3.5) * player.spinoutDir * 3.4 * dt;
+      const safeSpinLat = ROAD_WIDTH * 0.48;
+      player.lateral = Math.max(-safeSpinLat, Math.min(safeSpinLat, player.lateral));
+    } else {
+      // Steer laterally + gentle outward curve drift
+      player.lateral += player.steerInput * (14.5 * Math.min(1.15, speedRatio + 0.25)) * dt;
+      player.lateral -= turnRate * (11.5 * speedRatio * speedRatio) * dt;
+      const maxLat = ROAD_WIDTH * 0.64;
+      player.lateral = Math.max(-maxLat, Math.min(maxLat, player.lateral));
     }
 
     if (player.speed > targetMax) {
@@ -2275,12 +2408,46 @@
       }
     }
 
+    // Update 3D Tire Smoke Puffs
+    for (let i = smokePuffs.length - 1; i >= 0; i--) {
+      const p = smokePuffs[i];
+      p.age += dt;
+      const t = p.age / p.maxAge;
+      p.mesh.position.y += dt * 1.4;
+      const sc = 1 + t * 2.8;
+      p.mesh.scale.set(sc, sc, sc);
+      p.mesh.material.opacity = Math.max(0, 0.72 * (1 - t));
+      if (p.age >= p.maxAge) {
+        dynamicGroup.remove(p.mesh);
+        smokePuffs.splice(i, 1);
+      }
+    }
+
     // 8. Place Cockpit, Animate Steering Wheel, Front Wheels, FOV & Screen Shake
-    const bank = -player.steerInput * 0.055;
-    placeOnTrack(playerKartGroup, player.u, player.lateral, 0, bank);
+    let spinYaw = 0;
+    let bank = -player.steerInput * 0.055;
+    if (player.spinoutTimer > 0) {
+      const t = 1 - (player.spinoutTimer / player.spinoutDuration);
+      const eased = 1 - Math.pow(1 - t, 2.2);
+      spinYaw = eased * Math.PI * 4 * player.spinoutDir; // Two full 360° cockpit spins
+      bank = Math.sin(t * Math.PI * 4) * 0.085;
+    }
+    placeOnTrack(playerKartGroup, player.u, player.lateral, 0, bank, spinYaw);
 
     if (steeringWheelGroup) {
-      steeringWheelGroup.rotation.z = -player.steerInput * 1.45;
+      if (player.spinoutTimer > 0) {
+        const t = 1 - (player.spinoutTimer / player.spinoutDuration);
+        steeringWheelGroup.rotation.z = Math.sin(t * Math.PI * 10) * 1.9 * player.spinoutDir;
+      } else {
+        steeringWheelGroup.rotation.z = -player.steerInput * 1.45;
+      }
+    }
+    if (frontWheelL && frontWheelR) {
+      const wRot = player.spinoutTimer > 0
+        ? Math.sin((1 - player.spinoutTimer / player.spinoutDuration) * Math.PI * 10) * 0.55
+        : -player.steerInput * 0.42;
+      frontWheelL.rotation.y = wRot;
+      frontWheelR.rotation.y = wRot;
     }
     if (frontWheelL && frontWheelR) {
       frontWheelL.rotation.y = -player.steerInput * 0.42;
@@ -2379,11 +2546,14 @@
   window.quitToMenu = function () {
     state.phase = 'menu';
     state.activeQuestion = null;
+    player.spinoutTimer = 0;
+    clearTimeout(feedbackTimeout);
     if (engineGain && audioCtx) engineGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
     document.getElementById('hud-overlay').classList.add('hidden');
     document.getElementById('question-modal').classList.add('hidden');
     document.getElementById('results-modal').classList.add('hidden');
     document.getElementById('countdown-banner').classList.add('hidden');
+    document.getElementById('spinout-overlay').classList.add('hidden');
     document.getElementById('menu-overlay').classList.remove('hidden');
   };
 
@@ -2562,9 +2732,12 @@
 
     // 3D Steering Wheel 8-LED Shift Strip
     const litCount = Math.round((rpmPct / 100) * 8);
+    const spinFlash = player.spinoutTimer > 0 && (Math.floor(now / 80) % 2 === 0);
     const flash = (player.boostTimer > 0 || player.starTimer > 0) && (Math.floor(now / 90) % 2 === 0);
     wheelLedMeshes.forEach((led, i) => {
-      if (flash) {
+      if (player.spinoutTimer > 0) {
+        led.material.color.setHex(spinFlash ? 0xef4444 : 0xf97316);
+      } else if (flash) {
         led.material.color.setHex(player.starTimer > 0 ? 0xfacc15 : 0x38bdf8);
       } else if (i < litCount) {
         led.material.color.setHex(i < 3 ? 0x22c55e : i < 6 ? 0xfacc15 : 0xef4444);
@@ -2573,10 +2746,15 @@
       }
     });
 
+    // Spin-Out HUD Overlay visibility
+    document.getElementById('spinout-overlay').classList.toggle('hidden', player.spinoutTimer <= 0);
+
     // Update 3D Wheel OLED at ~12 FPS for crisp performance
     if (now - lastOledUpdate > 85) {
       lastOledUpdate = now;
-      const modeTxt = player.starTimer > 0 ? 'STAR!' : (player.boostTimer > 0 ? 'BOOST' : 'RACE');
+      const modeTxt = player.spinoutTimer > 0
+        ? 'SPIN!'
+        : (player.starTimer > 0 ? 'STAR!' : (player.boostTimer > 0 ? 'BOOST' : 'RACE'));
       updateWheelOled(player.speed, gear, modeTxt);
     }
 
