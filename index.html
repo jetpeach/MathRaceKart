@@ -1042,6 +1042,9 @@
     const right = new THREE.Vector3().crossVectors(tangent, worldUp).normalize();
     const back = tangent.clone().negate();
     const up = new THREE.Vector3().crossVectors(back, right).normalize();
+    return { pos, tangent, right, up, back };
+  }
+
   function placeOnTrack(obj, u, lateral = 0, yOffset = 0, extraBank = 0, extraYaw = 0) {
     const f = getTrackFrame(u);
     obj.position.copy(f.pos)
@@ -1662,20 +1665,6 @@
     dynamicGroup.add(puff);
     smokePuffs.push({ mesh: puff, age: 0, maxAge: 0.65 });
   }
-    fbEl.classList.remove('hidden');
-
-    // Resume racing after brief readable feedback pause
-    const delayMs = qObj.kind === 'knowledge' ? 1450 : 1050;
-    setTimeout(() => {
-      document.getElementById('question-modal').classList.add('hidden');
-      if (state.phase === 'question') {
-        state.phase = 'racing';
-        // +1 more question per race cadence (~9.0–11.5s between questions => ~5–6 per race)
-        state.nextQuestionTimer = 9.0 + Math.random() * 2.5;
-        state.warningShown = false;
-      }
-    }, delayMs);
-  }
 
   /* =========================================================================
      8. SPECIAL ITEMS & 3D PROJECTILES
@@ -2245,30 +2234,6 @@
       player.lateral = Math.max(-maxLat, Math.min(maxLat, player.lateral));
     }
 
-    if (player.speed > targetMax) {
-      player.speed += (targetMax - player.speed) * Math.min(1, dt * 4.5);
-    }
-    player.speed = Math.max(0, player.speed);
-
-    // 3. Steering & Centrifugal Curve Drift
-    let rawSteer = computeSteeringValue();
-    if (player.spinTimer > 0) {
-      player.spinTimer -= dt;
-      rawSteer = Math.sin(player.spinTimer * 16) * 0.85;
-    }
-    player.steerInput += (rawSteer - player.steerInput) * Math.min(1, dt * 12);
-
-    const fNow = getTrackFrame(player.u);
-    const fAhead = getTrackFrame(player.u + 0.008);
-    const turnRate = fAhead.tangent.clone().sub(fNow.tangent).dot(fNow.right);
-    const speedRatio = player.speed / 130;
-
-    // Steer laterally + gentle outward curve drift
-    player.lateral += player.steerInput * (14.5 * Math.min(1.15, speedRatio + 0.25)) * dt;
-    player.lateral -= turnRate * (11.5 * speedRatio * speedRatio) * dt;
-    const maxLat = ROAD_WIDTH * 0.64;
-    player.lateral = Math.max(-maxLat, Math.min(maxLat, player.lateral));
-
     // 4. Advance Forward Along Spline (scaled so 3 laps ≈ 65–72s)
     const metersPerSec = player.speed * 0.34;
     const du = (metersPerSec * dt) / trackLength;
@@ -2448,10 +2413,6 @@
         : -player.steerInput * 0.42;
       frontWheelL.rotation.y = wRot;
       frontWheelR.rotation.y = wRot;
-    }
-    if (frontWheelL && frontWheelR) {
-      frontWheelL.rotation.y = -player.steerInput * 0.42;
-      frontWheelR.rotation.y = -player.steerInput * 0.42;
     }
 
     // Dynamic FOV speed sensation + crash shake
